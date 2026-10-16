@@ -7,10 +7,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from splitforge.core.dependencies import download, unpack_verified_tar
+from splitforge.core.dependencies import component_plan, download, unpack_verified_tar
 
 
 class DependencyTests(unittest.TestCase):
+    def test_component_plan_includes_proxy_helpers_and_rejects_unknown_names(self):
+        self.assertEqual(component_plan(["dnstt-client"]), ["base", "xray", "tun2socks", "dnstt-client"])
+        self.assertEqual(component_plan(["wireguard", "wireguard"]), ["base", "wireguard"])
+        self.assertEqual(component_plan([]), [])
+        with self.assertRaises(ValueError):
+            component_plan(["arbitrary-command"])
+
     def test_offline_cache_requires_the_pinned_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             artifact = Path(directory) / "core.zip"

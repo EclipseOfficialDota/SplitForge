@@ -75,6 +75,32 @@ test a profile for a current result. Bandwidth is shared per-interface RX/TX,
 not per-app billing, and resets with interface recreation. HTTPS timing includes
 DNS/TLS/retries and is not ICMP ping.
 
+### Popup tutorial and core checklist
+
+Click **Quick start** in the sidebar or press **F1**. Use Back/Next to follow
+the six lessons and the language button to choose English or فارسی. Close or
+Escape dismisses it; opening/reading the guide never changes configuration.
+The guide's **Core checklist** button takes you directly to core selection.
+
+Press **F2**, use the sidebar **Core checklist** button, or open it from
+**Logs & Tools**. Tick the needed cores, review the displayed plan, then choose
+**Install selected**. Missing components needed by saved profiles are suggested;
+with no profiles, the default suggestion is Xray/tun2socks. All required proxy
+helpers and base network tools are included in the plan automatically.
+
+Installed/missing means executable-path detection, not a version or connectivity
+test. Installed items are skipped rather than updated. Use the CLI's explicit
+`dependencies install NAME` to reinstall the pinned release when needed. Batch
+progress is shown in Logs & Tools; builds/downloads run sequentially. DNSTT source
+builds may take several minutes. A failed item is reported, remaining selected
+items are attempted and successful installations remain installed. Reopen the
+checklist to retry missing tools. Installation needs root and upstream network
+access and does not start any profile. Demo mode allows preview only.
+
+Actual read-only previews: [popup walkthrough](assets/guide.svg) and
+[core checklist](assets/cores.svg). Terminal font/RTL support affects Persian
+text rendering; English remains available in the guide.
+
 ## First tunnel
 
 Keep real credentials under a mode-0700 directory, with files mode 0600, e.g.

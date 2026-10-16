@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0 — 2026-10-17
+
+- In-app six-step walkthrough with English/Persian language switching, accessible
+  from the sidebar or F1 without modifying configuration.
+- Core checklist (F2 / Logs & Tools) with installed/missing detection, recommended
+  selections and automatic required proxy helpers.
+- Sequential installation through the existing verified installer, visible batch
+  progress, installed-tool skipping and per-core failure reporting without
+  discarding successful installations. No profiles start during installation.
+- Read-only demo support and compact-terminal modal tests.
+
 ## 2.0.0 — 2026-10-17
 
 - Complete six-page Textual terminal interface with dashboard, app/profile

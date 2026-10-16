@@ -91,6 +91,17 @@ Keyboard: **1–6** switch pages, **A** register app, **N** new profile,
 Use Tab/arrows/Enter or mouse clicks; Escape cancels dialogs. A terminal of
 120×40 or larger is recommended; compact 80×24 mounting is tested.
 
+**New to SplitForge? Press F1** or choose **Quick start** in the sidebar for a
+six-step popup walkthrough. Switch between English and فارسی inside the guide.
+It covers required cores, profile import/testing, scripts/services, route
+changes, guards and recovery.
+
+**Press F2 → Core checklist** to select only the cores you need. Installed tools
+are marked and skipped; required Xray/tun2socks helpers are included automatically.
+The installer runs the selected components in sequence and shows progress and
+individual results in Logs & Tools. A failed download leaves successful installs
+in place so you can retry missing items. Demo mode never installs anything.
+
 ```text
 ╭─ ⚡ SPLITFORGE ───────────────────────────────────────────╮
 │ HOME MENU           │ APPLICATION → NETWORK               │

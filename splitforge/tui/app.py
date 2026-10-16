@@ -11,8 +11,8 @@ from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, Label, RichLog, Select, Static
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, Label, ProgressBar, RichLog, Select, Static
 
 from splitforge.core.netns import run
 from splitforge.core.runner import Runner
@@ -20,6 +20,7 @@ from splitforge.protocols.manager import ProtocolManager
 from splitforge.state import AppBinding, Profile, StateStore
 from splitforge.tui.screens.app_router import AppForm, BrowseView, RouterView
 from splitforge.tui.screens.home import HomeView
+from splitforge.tui.screens.help import CoreChecklist, GuideModal
 from splitforge.tui.screens.profiles import ProfileForm, ProfilesView
 
 
@@ -87,11 +88,11 @@ class LogsView(Vertical):
         yield Static("OBSERVE & OPERATE", classes="eyebrow")
         yield Static("Live logs & dependencies", classes="page-title")
         with Horizontal(classes="toolbar"):
-            yield Select([(name, name) for name in ("base", "wireguard", "openvpn", "xray", "tun2socks",
-                         "dnstt-client", "slipstream-client", "proxychains4")], value="base", allow_blank=False, id="dependency-choice")
-            yield Button("Install dependency", id="install-dependency", variant="primary")
+            yield Button("Core checklist · F2", id="install-dependency", variant="primary")
             yield Button("Read journal", id="read-journal")
         yield Static("Pinned binary downloads verify SHA-256. Journal follows SplitForge units while this panel is open.", classes="hint")
+        yield Static("Choose cores to install / هسته‌های موردنیاز را انتخاب کنید", id="dependency-status", markup=False)
+        yield ProgressBar(total=1, show_eta=False, id="dependency-progress")
         yield RichLog(id="live-log", wrap=True, highlight=False, markup=False, max_lines=2000)
 
     @on(Button.Pressed)
@@ -100,9 +101,7 @@ class LogsView(Vertical):
         if event.button.id == "read-journal":
             self.app.load_journal()
         elif event.button.id == "install-dependency":
-            from splitforge.core.dependencies import install
-            name = str(self.query_one(Select).value)
-            self.app.perform(lambda: install(name), "Dependency installed")
+            self.app.action_core_checklist()
 
 
 class SplitForgeApp(App):
@@ -113,7 +112,8 @@ class SplitForgeApp(App):
         Binding("4", "navigate('browse')", "Add app"), Binding("5", "navigate('security')", "Security"),
         Binding("6", "navigate('logs')", "Logs"), Binding("a", "add_app", "Add"),
         Binding("n", "new_profile", "New VPN"), Binding("c", "change_route", "Change"),
-        Binding("t", "test_all", "Test active"), Binding("r", "refresh", "Refresh")]
+        Binding("t", "test_all", "Test active"), Binding("r", "refresh", "Refresh"),
+        Binding("f1", "guide", "Guide"), Binding("f2", "core_checklist", "Cores")]
 
     def __init__(self, state_path=Path("/etc/splitforge/state.json"), demo=False):
         super().__init__()
@@ -132,12 +132,14 @@ class SplitForgeApp(App):
             yield Static("⚡ SPLITFORGE", id="brand")
             yield Static("", id="host-status")
         with Horizontal(id="workspace"):
-            with Vertical(id="sidebar"):
+            with VerticalScroll(id="sidebar"):
                 yield Static("HOME MENU", id="menu-title")
                 for key, label in [("home", "🏠 Home dashboard"), ("router", "🔀 App router"),
                     ("profiles", "🔐 VPN profiles"), ("browse", "＋ Add / browse app"),
                     ("security", "🛡 Security & DNS"), ("logs", "📜 Logs & tools")]:
                     yield Button(label, id=f"nav-{key}", classes="nav-button")
+                yield Button("? Quick start · F1", id="open-guide", classes="utility-button")
+                yield Button("↓ Core checklist · F2", id="open-cores", classes="utility-button")
                 yield Static("─────────────\n[Enter] Select\n[C] Change route\n[A] Register app\n[N] New profile\n[T] Test active\n[Q] Exit", id="shortcuts", markup=False)
                 yield Static("DEMO · READ ONLY" if self.demo else "ROOT CONTROL PLANE\nWorkloads: root or user", id="mode-label")
             with ContentSwitcher(initial="home", id="pages"):
@@ -178,6 +180,64 @@ class SplitForgeApp(App):
             self.notify("Wait for the current operation to finish before exiting")
         else:
             self.exit()
+
+    @on(Button.Pressed, "#open-guide")
+    def guide_button(self, event):
+        event.stop()
+        self.action_guide()
+
+    @on(Button.Pressed, "#open-cores")
+    def cores_button(self, event):
+        event.stop()
+        self.action_core_checklist()
+
+    def action_guide(self):
+        if isinstance(self.screen, (GuideModal, CoreChecklist)):
+            return
+        self.push_screen(GuideModal(), lambda choice: self.action_core_checklist() if choice == "cores" else None)
+
+    def action_core_checklist(self):
+        if isinstance(self.screen, GuideModal):
+            self.screen.dismiss("cores")
+            return
+        if isinstance(self.screen, CoreChecklist):
+            return
+        if self.busy:
+            self.notify("Wait for the current operation to finish")
+            return
+        from splitforge.core.dependencies import COMPONENTS, component_plan
+        tools = {tool for profile in self.current_profiles for tool in self.manager.dependencies(profile.protocol)}
+        recommended = [name for name, (binaries, _) in COMPONENTS.items() if tools.intersection(binaries)]
+        if not self.current_profiles:
+            recommended = ["xray", "tun2socks"]
+        self.push_screen(CoreChecklist(component_plan(recommended)), self.install_cores)
+
+    def install_cores(self, names):
+        if not names:
+            return
+        from splitforge.core.dependencies import component_installed, component_plan, install
+        names = component_plan(names)
+        self.action_navigate("logs")
+
+        def operation():
+            failures = []
+            for index, name in enumerate(names):
+                self.call_from_thread(self.core_progress, index, len(names), f"Installing {name}…")
+                try:
+                    result = f"{name}: already installed; skipped" if component_installed(name) else install(name)
+                except Exception as failure:
+                    failures.append(name)
+                    result = f"ERROR · {name}: {failure}"
+                self.call_from_thread(self.core_progress, index + 1, len(names), result)
+            if failures:
+                raise RuntimeError("Failed: " + ", ".join(failures) + "; successful installations were retained. See logs.")
+
+        self.perform(operation, "Selected cores processed; see individual results in Logs & Tools")
+
+    def core_progress(self, completed, total, message):
+        self.query_one("#dependency-status", Static).update(Text(f"{completed}/{total} · {message}"))
+        self.query_one("#dependency-progress", ProgressBar).update(total=total, progress=completed)
+        self.append_log(message)
 
     def action_add_app(self):
         self.open_app_form()

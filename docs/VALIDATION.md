@@ -18,6 +18,12 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.1.0 adds focused tests for walkthrough navigation/language switching,
+compact checklist cancellation, automatic dependency planning, demo no-install
+behavior, installed-tool skipping and partial batch failure. These use the real
+Textual interface with mocked installers, so they do not download packages.
+The existing verified installer and network integration tests remain in CI.
+
 - Windows workstation hosting Ubuntu 24.04 under WSL2, x86_64.
 - systemd PID 1, Python 3.12.3, working network namespaces/nftables and `/dev/net/tun`.
 - Xray v26.3.27; tun2socks v2.7.0; WireGuard tools 1.0.20210914;

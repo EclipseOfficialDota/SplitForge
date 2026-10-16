@@ -34,6 +34,35 @@ PACKAGES = {
     "wireguard": ["wireguard-tools"], "openvpn": ["openvpn"],
     "proxychains4": ["proxychains4"],
 }
+COMPONENTS = {
+    "base": (("ip", "nft", "sysctl"), "Linux network tools / ابزارهای پایه"),
+    "xray": (("xray",), "VLESS, VMess, REALITY, Trojan, Shadowsocks, SOCKS5"),
+    "tun2socks": (("tun2socks",), "TUN bridge for proxy profiles / پل شبکه پروکسی"),
+    "wireguard": (("wg",), "WireGuard profiles / پروفایل وایرگارد"),
+    "openvpn": (("openvpn",), "OpenVPN profiles / پروفایل اوپن وی پی ان"),
+    "dnstt-client": (("dnstt-client",), "DNSTT DNS tunnel / تونل دی ان اس"),
+    "slipstream-client": (("slipstream-client",), "Slipstream DNS tunnel / تونل دی ان اس"),
+    "proxychains4": (("proxychains4",), "Optional TCP wrapper / حالت اختیاری TCP"),
+}
+
+
+def component_plan(names) -> list[str]:
+    """Include the network tools and proxy helpers required by selected cores."""
+    selected = set(names)
+    if selected - COMPONENTS.keys():
+        raise ValueError("Unknown dependency selection")
+    if selected & {"xray", "tun2socks", "dnstt-client", "slipstream-client"}:
+        selected.update({"xray", "tun2socks"})
+    if selected:
+        selected.add("base")
+    return [name for name in COMPONENTS if name in selected]
+
+
+def component_installed(name: str) -> bool:
+    """Executable discovery only; this does not certify versions or connectivity."""
+    return all(shutil.which(binary) for binary in COMPONENTS[name][0])
+
+
 DNSTT_REVISION = "17aa1fed864cd5493e3d09a14df1b8b5cc1df123"
 DNSTT_SHA256 = "d68bb4838133aa363436117c8a80d8899146a122f24a61aae1cd417d7913b9dc"
 GO_VERSION = "go1.26.1"

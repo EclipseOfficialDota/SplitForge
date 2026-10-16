@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from typer.testing import CliRunner
+from splitforge import __version__
 from splitforge.cli import app
 
 
@@ -17,7 +18,7 @@ class CLITests(unittest.TestCase):
         self.assertIn("profile", result.output)
         result = runner.invoke(app, ["--version"])
         self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("2.0.0", result.output)
+        self.assertEqual(__version__, result.output.strip())
 
     def test_empty_profile_list_is_valid_json_and_read_only(self):
         with tempfile.TemporaryDirectory() as directory:
