@@ -18,6 +18,33 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.3.0: **54 Python tests passed with root integration enabled** locally,
+including HTTP-driven profile management and a real root systemd workload
+lifecycle. HTTP tests exercise token/session/logout/expiry, origin/host/CSRF
+rejection, rate limiting, body limits, demo guard, secret filtering and serialized
+job handling. Existing tunnel, failure, root reassignment and route checks pass.
+
+The optional Playwright suite also passes in desktop Chrome (1440px) and a
+390px mobile viewport. It checks dashboard data, route/app/profile forms, file
+browsing, read-only refusal, auto core helpers, DNS edits surviving polling,
+journal updates, Persian help, malicious-label escaping and logout. Actual
+[desktop](assets/web-overview.png) and [mobile](assets/web-mobile.png) captures
+were inspected. These are controlled tests, not an external web security audit.
+
+To reproduce browser checks (Node 22+; development tools only):
+
+```sh
+npm install --no-save --package-lock=false playwright@1.62.1
+npx playwright install chromium
+splitforge web --demo
+# In another terminal:
+node tests/web_browser.cjs
+```
+
+CI installs Chromium's Linux dependencies and runs the same browser suite.
+The web server must be running on loopback port 8765 for that check. Browser
+tests use demo data; the opt-in Python HTTP integration exercises real systemd.
+
 Version 2.1.0 adds focused tests for walkthrough navigation/language switching,
 compact checklist cancellation, automatic dependency planning, demo no-install
 behavior, installed-tool skipping and partial batch failure. These use the real

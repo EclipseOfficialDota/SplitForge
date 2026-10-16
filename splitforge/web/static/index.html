@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>SplitForge · Control plane</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true"></div>
+    <div class="terminal-window">
+      <header class="titlebar">
+        <div class="traffic-lights" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="window-title">⌘ &nbsp; splitforge — control plane</span>
+        <span class="window-hint">SECURE LOCAL SESSION</span>
+      </header>
+      <section id="login-view" class="login-view">
+        <span class="brand-mark">sf<span>_</span></span>
+        <p class="eyebrow">YOUR NETWORK. YOUR RULES.</p>
+        <h1>Welcome to <span>SplitForge.</span></h1>
+        <p class="muted">
+          A separate network path for every application.<br />One quiet place to
+          control it all.
+        </p>
+        <form id="login-form" class="login-form">
+          <label for="access-token">Administrator access token</label>
+          <input
+            id="access-token"
+            name="token"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Paste your local access token"
+            maxlength="256"
+          />
+          <button class="button primary" type="submit" id="login-button">
+            Unlock control plane <span>↗</span>
+          </button>
+          <p id="login-error" class="error-text" role="alert"></p>
+        </form>
+        <p class="micro" id="login-note">
+          Token: <code>/etc/splitforge/web.token</code><br />Connect remotely
+          through SSH port forwarding.
+        </p>
+      </section>
+      <div id="app-shell" class="app-shell" hidden>
+        <aside class="sidebar">
+          <a href="#overview" class="brand"
+            ><span class="brand-mark small">sf<span>_</span></span
+            ><span
+              >SplitForge<small id="version-label">CONTROL PLANE</small></span
+            ></a
+          >
+          <div class="workspace-label">
+            <span class="dot green"></span
+            ><span id="workspace-host">LOCAL SERVER</span
+            ><span class="tiny-tag">ROOT</span>
+          </div>
+          <div class="nav-caption">WORKSPACE</div>
+          <nav aria-label="Main navigation">
+            <button data-page="overview" class="nav-item active">
+              <span>▦</span>Overview<kbd>1</kbd>
+            </button>
+            <button data-page="router" class="nav-item">
+              <span>⇄</span>App router<kbd>2</kbd>
+            </button>
+            <button data-page="profiles" class="nav-item">
+              <span>◎</span>Tunnel profiles<kbd>3</kbd>
+            </button>
+            <button data-page="security" class="nav-item">
+              <span>◇</span>Security & DNS<kbd>4</kbd>
+            </button>
+            <button data-page="cores" class="nav-item">
+              <span>↓</span>Core installer<kbd>5</kbd>
+            </button>
+            <button data-page="logs" class="nav-item">
+              <span>›_</span>Live logs<kbd>6</kbd>
+            </button>
+          </nav>
+          <div class="sidebar-divider"></div>
+          <button data-page="help" class="nav-item">
+            <span>?</span>Quick start<kbd>7</kbd>
+          </button>
+          <div class="sidebar-bottom">
+            <div class="machine-card">
+              <div><span class="dot green"></span> System resources</div>
+              <dl>
+                <dt>CPU</dt>
+                <dd id="cpu-label">—</dd>
+                <dt>Memory</dt>
+                <dd id="memory-label">—</dd>
+              </dl>
+              <div class="meter"><span id="memory-meter"></span></div>
+            </div>
+            <button id="logout-button" class="session-button">
+              ◌ <span>End web session</span><span>↗</span>
+            </button>
+          </div>
+        </aside>
+        <div class="main-shell">
+          <div class="commandbar">
+            <button
+              id="menu-toggle"
+              class="icon-button mobile-menu"
+              aria-label="Toggle navigation"
+            >
+              ☰
+            </button>
+            <div class="prompt">
+              <span>root</span><b>@</b><span id="host-label">server</span
+              ><b>:</b><strong>~</strong><em>$</em>
+              <span id="breadcrumb">overview</span
+              ><span class="cursor" aria-hidden="true"></span>
+            </div>
+            <div class="commandbar-right">
+              <span id="mode-badge" class="mode-badge">LIVE SESSION</span
+              ><button
+                id="refresh-button"
+                class="icon-button"
+                aria-label="Refresh server state"
+              >
+                ↻
+              </button>
+            </div>
+          </div>
+          <div
+            id="connection-banner"
+            class="connection-banner"
+            role="status"
+            hidden
+          ></div>
+          <div id="job-banner" class="job-banner" role="status" hidden></div>
+          <main id="main-content" tabindex="-1"></main>
+          <footer class="statusbar">
+            <span
+              ><span class="dot green" id="connection-dot"></span
+              ><span id="connection-label">Connecting…</span></span
+            ><span
+              >IPv4 namespaces <b>·</b> Encrypted DNS <b>·</b>
+              <span id="updated-label">—</span></span
+            >
+          </footer>
+        </div>
+      </div>
+    </div>
+    <dialog id="modal" aria-labelledby="modal-title">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow" id="modal-eyebrow">CONTROL PLANE</p>
+          <h2 id="modal-title"></h2>
+        </div>
+        <button id="modal-close" class="icon-button" aria-label="Close dialog">
+          ×
+        </button>
+      </div>
+      <div id="modal-body"></div>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

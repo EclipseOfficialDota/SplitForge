@@ -11,6 +11,14 @@ from splitforge.cli import app
 
 
 class CLITests(unittest.TestCase):
+    def test_web_command_preserves_custom_state_and_demo_options(self):
+        with patch("splitforge.web.server.serve") as serve:
+            result = CliRunner().invoke(app, ["--state", "/root/private.json", "web", "--demo", "--port", "9000"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(serve.call_args.args, (Path("/root/private.json"),))
+        self.assertEqual(serve.call_args.kwargs["port"], 9000)
+        self.assertTrue(serve.call_args.kwargs["demo"])
+
     def test_update_command_passes_prefix_and_state_to_updater(self):
         with patch("splitforge.core.updater.update") as update:
             result = CliRunner().invoke(app, ["--state", "/root/custom-state.json", "update", "--prefix", "/opt/custom", "--force"])

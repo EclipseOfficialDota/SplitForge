@@ -79,6 +79,24 @@ sessions, process memory and unfinished work do not migrate. Unregistered apps
 continue using their existing network. SSH/network infrastructure services are
 protected against adoption.
 
+## Web control panel
+
+Prefer a browser? Version 2.3 includes a macOS Terminal-style dashboard with
+application routing, tunnel profiles, DNS, a core checklist and live logs.
+
+```sh
+sudo splitforge web
+# Read-only preview:
+splitforge web --demo
+```
+
+![SplitForge web panel in read-only demo mode](docs/assets/web-overview.png)
+
+The real panel requires its private administrator token and listens on
+`127.0.0.1:8765`. Access a VPS through an SSH forward; see the
+[web setup guide](docs/WEB_PANEL.md) for sign-in, options and a persistent service.
+The backend runs on Linux; the browser UI works on macOS, Windows and Linux.
+
 ## The terminal experience
 
 | Screen | Controls |
@@ -205,6 +223,7 @@ depending on unattended recovery.
 | Guide | Contents |
 | --- | --- |
 | [Getting started](docs/GETTING_STARTED.md) | Installation, root scripts, services, upgrades and cleanup |
+| [Web panel](docs/WEB_PANEL.md) | Browser dashboard, token sign-in, SSH forwarding and persistent service |
 | [فارسی](docs/README.fa.md) | آموزش قدم‌به‌قدم و مدیریت سرور |
 | [Protocols](docs/PROTOCOLS.md) | Provider files, URI formats and DNS tunnels |
 | [Architecture](docs/ARCHITECTURE.md) | Routing ownership, guards and lifecycle |

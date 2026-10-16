@@ -135,20 +135,7 @@ def profile_dns(ctx: typer.Context, name: str, url: str, bootstrap: str):
 
 @profiles.command("remove")
 def profile_remove(ctx: typer.Context, name: str):
-    require_root()
-    store, manager, _ = objects(ctx)
-    profile = store.profile(name)
-    snapshot = store.snapshot()
-    if any(a["profile_id"] == profile.id for a in snapshot["apps"].values()) or profile.id in snapshot["users"].values():
-        raise ValueError("Reassign/remove all application and user references first")
-    unit = Path("/etc/systemd/system", f"splitforge-profile-{profile.id}.service")
-    if unit.exists():
-        manager.stop(profile.id)
-        unit.unlink()
-        run(["systemctl", "daemon-reload"])
-    elif manager.netns.exists(profile):
-        raise ValueError("Orphan namespace detected; inspect and repair its profile unit before removing state")
-    store.delete_profile(profile.id)
+    objects(ctx)[1].remove(name)
     typer.echo("Profile removed")
 
 
@@ -304,6 +291,17 @@ def update(ctx: typer.Context,
     """Download and install the latest official version, backing up state and restoring workloads."""
     from splitforge.core.updater import update as update_installation
     update_installation(ctx.find_root().obj["state"], prefix=prefix, force=force, report=typer.echo)
+
+
+@app.command("web")
+def web(ctx: typer.Context,
+        host: str = typer.Option("127.0.0.1", "--host", help="Loopback host; use an SSH forward for remote access."),
+        port: int = typer.Option(8765, "--port", min=1, max=65535),
+        token_file: Path = typer.Option(Path("/etc/splitforge/web.token"), "--token-file"),
+        demo: bool = typer.Option(False, "--demo", help="Read-only sample dashboard; no root or token required.")):
+    """Open the authenticated macOS-style web control panel."""
+    from splitforge.web.server import serve
+    serve(ctx.find_root().obj["state"], host=host, port=port, token_file=token_file, demo=demo)
 
 
 @app.command("restore")

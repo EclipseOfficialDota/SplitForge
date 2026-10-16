@@ -306,6 +306,22 @@ class ProtocolManager:
         run(["systemctl", "stop", self._unit(profile)], timeout=130)
         run(["systemctl", "disable", self._unit(profile)])
 
+    def remove(self, name: str):
+        """Remove an unreferenced profile and only its owned system resources."""
+        require_root()
+        profile = self.store.profile(name)
+        snapshot = self.store.snapshot()
+        if any(a["profile_id"] == profile.id for a in snapshot["apps"].values()) or profile.id in snapshot["users"].values():
+            raise ValueError("Reassign/remove all application and user references first")
+        unit = Path("/etc/systemd/system", self._unit(profile))
+        if unit.exists():
+            self.stop(profile.id)
+            unit.unlink()
+            run(["systemctl", "daemon-reload"])
+        elif self.netns.exists(profile):
+            raise ValueError("Inspect the orphan namespace before removing state")
+        self.store.delete_profile(profile.id)
+
     def _service(self, profile: Profile, role: str, argv: list[str], *, namespace: bool = False,
                  restart: bool = True):
         args = ["systemd-run", "--quiet", "--collect", "--service-type=exec",

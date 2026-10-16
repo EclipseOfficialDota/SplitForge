@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0 — 2026-10-17
+
+- macOS Terminal-style browser dashboard with responsive layout, app routing,
+  profile imports/lifecycle/replacement, server file picker, encrypted DNS,
+  core checklist, live journal and English/Persian quick-start guide.
+- `splitforge web` with loopback binding, private access token, expiring sessions,
+  CSRF/Host/Origin protection, sign-in rate limit and no-cache/framing headers.
+- Serialized background operations and readable progress/failure results; read-only
+  demo mode supports browser previews without root or server mutation.
+- Real HTTP/systemd root workload test, authentication/API security tests,
+  Playwright desktop/mobile checks and packaged local web assets.
+
 ## 2.2.0 — 2026-10-17
 
 - `splitforge update` fetches the official master revision without requiring an

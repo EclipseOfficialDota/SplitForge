@@ -24,6 +24,18 @@ There is no completed security audit or production/SSH-safety certification.
 
 ## Configuration secrets
 
+The web panel binds only to loopback and requires its private access token;
+remote access uses SSH forwarding. The token grants privileged control of
+workloads and must be protected like an SSH credential. Sessions expire after
+eight hours and are invalidated by restart/logout. Host/Origin and CSRF checks
+protect mutation endpoints; browser assets have no third-party dependencies.
+The interface is for a trusted local administrator, not a public multi-tenant
+service. See [web access and token handling](docs/WEB_PANEL.md).
+
+Saved profile configuration/private keys are not returned by the web state API.
+Authenticated journal output and application command arguments can still contain
+sensitive information. Do not share panel captures/logs without inspection.
+
 The default state file is `/etc/splitforge/state.json`. It can contain WireGuard
 private keys, proxy passwords/UUIDs, inline OpenVPN keys and other sensitive
 configuration. It is plaintext on disk with protected file permissions, not an

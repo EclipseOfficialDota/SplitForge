@@ -43,3 +43,30 @@ jobs:
         run: sudo bash install.sh
       - name: Exercise actual namespaces, guards, proxy transports and WireGuard
         run: sudo env SPLITFORGE_INTEGRATION=1 /opt/splitforge/venv/bin/python -m unittest discover -s tests -v
+  web-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m venv .venv && .venv/bin/pip install -c requirements.lock -e .
+      - run: npm install --no-save --package-lock=false playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise the actual web panel in Chromium
+        env:
+          SPLITFORGE_SCREENSHOTS: test-results
+        run: |
+          .venv/bin/python -m splitforge web --demo > /tmp/splitforge-web.log 2>&1 &
+          panel_pid=$!
+          trap 'kill "$panel_pid"' EXIT
+          node tests/web_browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-screenshots
+          path: test-results/

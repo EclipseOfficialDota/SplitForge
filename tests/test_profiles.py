@@ -12,6 +12,17 @@ from splitforge.state import AppBinding, Profile, StateStore
 
 @unittest.skipUnless(os.name == "posix", "POSIX state locking")
 class ProfileTests(unittest.TestCase):
+    def test_remove_rejects_profiles_still_assigned_to_an_app(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = StateStore(Path(directory) / "state.json")
+            profile = store.save_profile(Profile("referenced", "socks5", {}))
+            store.save_app(AppBinding("app", ["/bin/true"], profile_id=profile.id))
+            manager = ProtocolManager(store, Mock())
+            with patch("splitforge.protocols.manager.require_root"), self.assertRaisesRegex(ValueError, "references"):
+                manager.remove(profile.id)
+            self.assertEqual(store.profile(profile.id).id, profile.id)
+            manager.netns.destroy.assert_not_called()
+
     def test_replacement_preserves_identity_assignments_and_dns(self):
         with tempfile.TemporaryDirectory() as directory:
             store = StateStore(Path(directory) / "state.json")

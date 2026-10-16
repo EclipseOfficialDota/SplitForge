@@ -283,18 +283,7 @@ class SplitForgeApp(App):
         self.perform(operation, "Profile imported; start it when ready")
 
     def remove_profile(self, profile_id):
-        profile = self.store.profile(profile_id)
-        snapshot = self.store.snapshot()
-        if any(a["profile_id"] == profile_id for a in snapshot["apps"].values()) or profile_id in snapshot["users"].values():
-            raise ValueError("Reassign/remove all app and user references first")
-        unit = Path("/etc/systemd/system", f"splitforge-profile-{profile_id}.service")
-        if unit.exists():
-            self.manager.stop(profile_id)
-            unit.unlink()
-            run(["systemctl", "daemon-reload"])
-        elif self.manager.netns.exists(profile):
-            raise ValueError("Inspect the orphan namespace before removing its state")
-        self.store.delete_profile(profile_id)
+        self.manager.remove(profile_id)
 
     def perform(self, operation, label):
         if self.demo:

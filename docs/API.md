@@ -122,6 +122,7 @@ discovery. They do not install anything or validate versions/kernel support.
 ```python
 manager.start(name_or_id)
 manager.stop(name_or_id)
+manager.remove(name_or_id)
 manager.test(name_or_id, persist=True)
 manager.status(name_or_id)
 ```
@@ -130,6 +131,8 @@ manager.status(name_or_id)
   enables it for boot. The internal up helper creates networking and tests egress.
 - `stop()` stops/disables that profile unit; dependent apps can stop as well.
   It retains saved profile and app assignments.
+- `remove()` requires no app/user references, stops/removes its owned unit and
+  networking, then deletes the profile. CLI, TUI and web share this guard.
 - `test()` requires an existing namespace, performs a namespace HTTPS probe,
   returns `exit_ip`, `country`, `latency_ms`, `measurement`; it persists the first
   three by default. `persist` is keyword-only. No host HTTP fallback is used.
