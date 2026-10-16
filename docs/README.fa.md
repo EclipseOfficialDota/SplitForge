@@ -1,4 +1,23 @@
-# راهنمای کامل فارسی SplitForge
+<div align="center">
+
+# ⚡ SplitForge
+
+[![English](assets/language-en.svg)](../README.md)
+[![فارسی](assets/language-fa.svg)](README.fa.md)
+
+**مستندات فارسی** · برای تغییر زبان، روی دکمهٔ **English** کلیک کنید.
+
+### مسیر اینترنت هر برنامه را جداگانه انتخاب کنید.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-34d399.svg)](../LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-38bdf8.svg)](../pyproject.toml)
+[![CI](https://github.com/EclipseOfficialDota/SplitForge/actions/workflows/ci.yml/badge.svg)](https://github.com/EclipseOfficialDota/SplitForge/actions/workflows/ci.yml)
+
+</div>
+
+<div dir="rtl" align="right">
+
+# راهنمای کامل فارسی
 
 [صفحهٔ اصلی](../README.md) · [آموزش انگلیسی](GETTING_STARTED.md) · [پروتکل‌ها](PROTOCOLS.md) · [عیب‌یابی](TROUBLESHOOTING.md)
 
@@ -24,6 +43,8 @@ Ubuntu/Debian با Python 3.10 یا جدیدتر، systemd به‌عنوان PID
 systemd انجام شده است. کانتینر یا VPS محدود ممکن است حتی با root اجازهٔ TUN ندهد.
 Ubuntu 22.04/24.04 و Debian 12/13 هدف نصب هستند؛ آزمایش همهٔ آن‌ها ادعا نشده است.
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo apt-get update
 sudo apt-get install -y git
@@ -33,16 +54,22 @@ sudo bash install.sh
 sudo splitforge doctor
 ```
 
+</div>
+
 نصب‌کننده ابزارهای سیستم، محیط مستقل `/opt/splitforge/venv`، وابستگی‌های پایتون
 با نسخه‌های محدودشده در `requirements.lock` و Xray/tun2socks با بررسی SHA-256 نصب
 می‌کند. فرمان `/usr/local/bin/splitforge` به محیط نصب متصل می‌شود. کد و مسیر نصب
 باید در اختیار مدیر سرور باشند. کلید VPN یا سرور رایگان همراه پروژه نیست.
+
+<div dir="ltr" align="left">
 
 ```sh
 sudo splitforge
 splitforge --demo
 splitforge --help
 ```
+
+</div>
 
 حالت demo بدون root و بدون تغییر شبکه/ذخیرهٔ وضعیت است؛ آدرس‌ها و اعدادش نمونه‌اند.
 برای نصب بدون دریافت هسته‌های پروکسی از `--skip-proxy-cores` استفاده کنید؛ پیش از
@@ -97,6 +124,8 @@ Escape پنجره را می‌بندد. کلیک ماوس نیز کار می‌�
 IPv4 و peer با `AllowedIPs=0.0.0.0/0` داشته باشد. دستورات PostUp و مانند آن
 پذیرفته نمی‌شوند تا تنظیمات شبکهٔ میزبان اجرا نشوند.
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge profile import /root/profiles/client.conf --name wg-europe
 sudo splitforge profile start wg-europe
@@ -104,10 +133,14 @@ sudo splitforge profile test wg-europe
 sudo splitforge status
 ```
 
+</div>
+
 وارد کردن فقط ذخیره می‌کند. شروع پروفایل سرویس را برای بوت فعال و DNS و HTTPS
 خروجی را بررسی می‌کند. اگر بررسی شکست بخورد، مسیر مستقیم جایگزین نمی‌شود.
 برای URI حاوی رمز، لینک را با ویرایشگر در فایل خصوصی ذخیره کنید تا وارد تاریخچهٔ
 شل و آرگومان پردازش نشود:
+
+<div dir="ltr" align="left">
 
 ```sh
 sudo splitforge profile import /root/profiles/private.uri --uri-file --name proxy-europe
@@ -115,17 +148,23 @@ sudo splitforge profile import /root/profiles/client.ovpn --name ovpn-europe
 sudo splitforge profile import /root/profiles/outbound.json --name xray-europe
 ```
 
+</div>
+
 فایل Xray فقط یک outbound می‌پذیرد؛ routing دلخواه و bypass وارد نمی‌شود. فایل
 OpenVPN با فهرست مجاز کنترل می‌شود و script/plugin/include رد می‌شود. فایل‌های
 کلید و گواهیِ ارجاع‌شده باید بعد از import هم موجود بمانند.
 
 ## اجرای یک‌باره با root
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge exec --profile wg-europe --user root --cwd /root -- /usr/bin/python3 /root/bot.py
 sudo splitforge exec --profile wg-europe --user root -- /bin/bash /root/backup.sh
 sudo splitforge exec --profile direct --user root -- /usr/bin/id
 ```
+
+</div>
 
 فرمان بعد از `--` قرار می‌گیرد؛ آرگومان‌ها مستقیماً ارسال می‌شوند و شل ضمنی ندارند.
 برای پروژهٔ دارای venv، مسیر پایتون همان پروژه را بدهید. CLI به‌طور پیش‌فرض root
@@ -135,6 +174,8 @@ sudo splitforge exec --profile direct --user root -- /usr/bin/id
 
 ## اجرای دائمی و تغییر مسیر
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge app add telegram-bot --user root --cwd /root/bot -- /root/bot/venv/bin/python /root/bot/main.py
 sudo splitforge bind telegram-bot --profile wg-europe
@@ -142,6 +183,8 @@ sudo splitforge bind telegram-bot --profile proxy-europe
 sudo splitforge bind telegram-bot --profile direct
 sudo splitforge app stop telegram-bot
 ```
+
+</div>
 
 ثبت برنامه به‌تنهایی آن را اجرا نمی‌کند. bind سرویس تولیدشده را شروع و برای بوت
 فعال می‌کند؛ خرابی پردازش باعث تلاش برای اجرای مجدد می‌شود. `bind --stopped`
@@ -154,12 +197,16 @@ sudo splitforge app stop telegram-bot
 
 ## سرویس systemd و نگاشت کاربر
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge app add my-worker --user root --service my-worker.service
 sudo splitforge bind my-worker --profile wg-europe
 sudo splitforge user bind worker wg-europe
 sudo splitforge user bind worker direct
 ```
+
+</div>
 
 کاربر ثبت‌شده باید با کاربر مؤثر سرویس برابر باشد. سرویس بدون User= یا با User=0
 نیز root محسوب می‌شود و پشتیبانی می‌شود. سرویس‌های SSH، شبکه، resolver، داخلی
@@ -181,11 +228,15 @@ IPv6 در namespace غیرفعال است. Kill Switch و DNS Guard برای ب�
 کرنل یا سرویس‌دهنده همچنان می‌توانند شبکه را مختل کنند؛ تضمین مطلق قطعی‌ناپذیری SSH
 وجود ندارد.
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge profile stop wg-europe
 sudo splitforge profile dns wg-europe https://cloudflare-dns.com/dns-query 1.1.1.1
 sudo splitforge profile start wg-europe
 ```
+
+</div>
 
 آدرس bootstrap باید گواهی معتبر برای hostname تنظیم‌شده ارائه دهد. DNS برنامه
 از stub محلی به HTTPS داخل تونل می‌رود. برای شبکهٔ خصوصی می‌توانید endpoint تست
@@ -198,6 +249,8 @@ DNSTT و Slipstream به دامنهٔ delegated و سرور سازگار نیا�
 Slipstream گواهی PEM پین‌شده و DNSTT کلید عمومی ۳۲ بایتی hex می‌خواهد.
 روش راه‌اندازی در [راهنمای پروتکل‌ها](PROTOCOLS.md) آمده است.
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge dependencies install dnstt-client
 sudo splitforge profile dns-tunnel dns-main dnstt t.example.com udp://1.1.1.1:53 --public-key-file /root/server.pub
@@ -205,10 +258,14 @@ sudo splitforge dependencies install slipstream-client
 sudo splitforge profile dns-tunnel dns-backup slipstream t.example.com 1.1.1.1:53 --certificate /root/server.pem
 ```
 
+</div>
+
 نمونه‌ها به سرور و دامنهٔ واقعی خودتان نیاز دارند. ساخت DNSTT از سورس پین‌شده است
 و دسترسی به رجیستری Go لازم دارد؛ فیلترینگ دانلود می‌تواند نصب را متوقف کند.
 
 ## ویرایش، ارتقا، توقف و بازیابی
+
+<div dir="ltr" align="left">
 
 ```sh
 sudo splitforge profile stop wg-europe
@@ -217,10 +274,14 @@ sudo splitforge profile start wg-europe
 sudo splitforge bind telegram-bot --profile wg-europe
 ```
 
+</div>
+
 جایگزینی شناسه، اتصال برنامه‌ها، DNS و تنظیم تست را حفظ و اندازه‌گیری قبلی را پاک
 می‌کند. شروع مجدد پروفایل به‌تنهایی همهٔ برنامه‌های متوقف‌شده را راه نمی‌اندازد؛
 bind یا restore را آگاهانه اجرا کنید. برای ارتقا ابتدا از state، کلیدهای اصلی،
 واحدهای systemd و دادهٔ برنامه بکاپ خصوصی بگیرید:
+
+<div dir="ltr" align="left">
 
 ```sh
 git pull --ff-only
@@ -228,6 +289,8 @@ sudo bash install.sh --upgrade --restore
 sudo splitforge status
 sudo splitforge logs --follow
 ```
+
+</div>
 
 ارتقا workloadها را متوقف، intent فعال‌بودن را حفظ و بسته را نصب می‌کند؛ restore
 دوباره همان intent را اعمال می‌کند. بدون آن می‌توانید بعداً `sudo splitforge restore`
@@ -239,9 +302,13 @@ sudo splitforge logs --follow
 
 از نسخهٔ **۲٫۲** به بعد، از هر پوشه‌ای می‌توانید اجرا کنید:
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge update
 ```
+
+</div>
 
 اگر با root وارد شده‌اید، فقط `splitforge update` کافی است. برنامه آخرین نسخهٔ
 شاخهٔ رسمی master را دریافت می‌کند، مسیر نصب را خودکار تشخیص می‌دهد و از state
@@ -259,12 +326,16 @@ sudo splitforge update
 اگر نسخهٔ فعلی شما قدیمی‌تر از ۲٫۲ است، یک بار با روش `git pull` و
 `install.sh --upgrade --restore` بالا آپدیت کنید تا این فرمان اضافه شود.
 
+<div dir="ltr" align="left">
+
 ```sh
 sudo splitforge app remove telegram-bot
 sudo splitforge profile stop wg-europe
 sudo splitforge profile remove wg-europe
 sudo splitforge stop-all
 ```
+
+</div>
 
 قبل از حذف پروفایل، ارجاع برنامه‌ها و کاربرانش را بردارید. حذف ثبت سرویس موجود
 خودِ unit اصلی یا داده‌ها را حذف نمی‌کند ولی آن را متوقف می‌کند. برای uninstall
@@ -284,3 +355,5 @@ root، تعویض برنامه و جلوگیری از fallback هستند. تس�
 [VALIDATION.md](VALIDATION.md) است. برای گزارش، نسخهٔ سیستم و هسته‌ها، خطای دقیق
 و لاگ پاک‌سازی‌شده از اطلاعات حساس را در
 [Issues](https://github.com/EclipseOfficialDota/SplitForge/issues) بفرستید.
+
+</div>

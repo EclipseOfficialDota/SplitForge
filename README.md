@@ -2,8 +2,12 @@
 
 # ⚡ SplitForge
 
+[![English](docs/assets/language-en.svg)](README.md)
+[![فارسی](docs/assets/language-fa.svg)](docs/README.fa.md)
+
+**English documentation** · Click **فارسی** above to switch languages.
+
 ### One terminal. Many tunnels. A network path for every app.
-### مسیر اینترنت هر برنامه را جداگانه انتخاب کنید.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-34d399.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-38bdf8.svg)](pyproject.toml)
@@ -195,17 +199,6 @@ DNS and probe configuration. Profile start and generated app binding enable
 their systemd units for boot. `restore` reapplies saved enabled assignments.
 Rehearse provider-specific behavior and reboot recovery on your server before
 depending on unattended recovery.
-
-## فارسی — شروع سریع
-
-این نسخه رابط کامل ترمینال، CLI، نصب‌کننده، ذخیرهٔ وضعیت و اجرای برنامه با root
-یا کاربر عادی دارد. بعد از نصب، `sudo splitforge` را اجرا کنید؛ در VPN Profiles
-پروفایل را وارد و آزمایش کنید، برنامه را ثبت کنید و از App Router مسیرش را انتخاب کنید.
-تعویض مسیر با ری‌استارت برنامه انجام می‌شود. IPv6 داخل namespace غیرفعال است؛
-DNSTT و Slipstream در این آداپتور TCP هستند و SOCKS5 سمت مقابل لازم دارند.
-آزمون واقعی لینوکس، WireGuard، SOCKS5، DNS رمزگذاری‌شده و اجرای root ثبت شده است؛
-تأیید همهٔ سرویس‌دهنده‌های عمومی یا ریبوت همهٔ توزیع‌ها ادعا نمی‌شود.
-[آموزش کامل فارسی](docs/README.fa.md).
 
 ## Documentation and development
 
