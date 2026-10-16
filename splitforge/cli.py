@@ -297,6 +297,15 @@ def doctor():
         raise typer.Exit(1)
 
 
+@app.command("update")
+def update(ctx: typer.Context,
+           prefix: Path | None = typer.Option(None, "--prefix", help="Managed installation directory; normally detected automatically."),
+           force: bool = typer.Option(False, "--force", help="Reinstall even when the official revision is already installed.")):
+    """Download and install the latest official version, backing up state and restoring workloads."""
+    from splitforge.core.updater import update as update_installation
+    update_installation(ctx.find_root().obj["state"], prefix=prefix, force=force, report=typer.echo)
+
+
 @app.command("restore")
 def restore(ctx: typer.Context):
     require_root()

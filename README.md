@@ -173,6 +173,7 @@ guarantee that unrelated host firewall, provider or kernel changes never affect 
 ## Operations
 
 ```sh
+sudo splitforge update
 sudo splitforge status --json
 sudo splitforge logs --follow
 sudo splitforge dependencies list
@@ -180,6 +181,14 @@ sudo splitforge profile stop wg-europe
 sudo splitforge profile import /root/profiles/new.conf --replace wg-europe
 sudo splitforge restore
 ```
+
+`splitforge update` downloads the latest official `master` revision without
+needing the original checkout. It detects the installation prefix, backs up an
+existing state file under `/var/backups/splitforge`, upgrades and restores saved
+enabled workloads. Managed workloads restart during the upgrade. An already
+installed revision is skipped. Use `sudo` unless you are logged in as root.
+Installations older than 2.2.0 need one manual upgrade to gain this command;
+see [upgrade instructions](docs/GETTING_STARTED.md#replace-and-upgrade).
 
 Replacement requires a stopped profile and retains its ID, app references,
 DNS and probe configuration. Profile start and generated app binding enable

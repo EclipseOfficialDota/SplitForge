@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.0 — 2026-10-17
+
+- `splitforge update` fetches the official master revision without requiring an
+  existing checkout, detects custom install prefixes and preserves custom state.
+- Private state backup before installation; restore of saved enabled workloads;
+  concurrent-update lock and same-revision skip (`--force` to reinstall).
+- Optional protocol cores are retained during self-update. The installer now
+  includes git and records its installed revision for future no-op detection.
+- Failure/backup/locking/CLI tests and bilingual self-update instructions.
+
 ## 2.1.0 — 2026-10-17
 
 - In-app six-step walkthrough with English/Persian language switching, accessible

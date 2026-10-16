@@ -239,6 +239,36 @@ Securely back up `/etc/splitforge`, original credential files, application data
 and owned units/drop-ins before upgrading:
 
 ```sh
+sudo splitforge update
+```
+
+Available from version 2.2.0. It fetches the official repository's current
+`master` into a private temporary directory; the original checkout is not needed
+and local checkout changes are left alone. The install prefix is detected from
+the running venv. A valid existing state file is backed up privately under
+`/var/backups/splitforge/update-.../state.json`, then the existing installer runs
+with upgrade/restore. Base system dependencies may be updated by apt; optional
+protocol cores are retained rather than forcibly downloaded again. Use the
+core checklist or `dependencies install` to manage those separately.
+
+The saved revision avoids restarting apps when already current. `--force`
+reinstalls the same revision. A dedicated lock rejects concurrent updates.
+Download/checkout validation completes before stopping workloads. If installation
+later fails, the backup remains and the error explains that workloads may stay
+stopped; repair the install and run `restore`. This is not automatic package or
+application-data rollback. Keep external credentials and data backups yourself.
+
+```sh
+sudo splitforge update --force
+sudo splitforge update --prefix /opt/custom-splitforge
+sudo splitforge --state /root/private/state.json update
+```
+
+Custom state selection is passed to both stop/restore operations. For versions
+before 2.2.0 (which do not yet recognize `update`), bootstrap it once from your
+existing checkout:
+
+```sh
 git pull --ff-only
 sudo bash install.sh --upgrade --restore
 sudo splitforge status

@@ -11,6 +11,14 @@ from splitforge.cli import app
 
 
 class CLITests(unittest.TestCase):
+    def test_update_command_passes_prefix_and_state_to_updater(self):
+        with patch("splitforge.core.updater.update") as update:
+            result = CliRunner().invoke(app, ["--state", "/root/custom-state.json", "update", "--prefix", "/opt/custom", "--force"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(update.call_args.args, (Path("/root/custom-state.json"),))
+        self.assertEqual(update.call_args.kwargs["prefix"], Path("/opt/custom"))
+        self.assertTrue(update.call_args.kwargs["force"])
+
     def test_help_and_version_do_not_mutate_state(self):
         runner = CliRunner()
         result = runner.invoke(app, ["--help"])

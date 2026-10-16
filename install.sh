@@ -33,7 +33,7 @@ if [[ -x $prefix/venv/bin/splitforge ]]; then
 fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends python3 python3-venv ca-certificates iproute2 nftables procps wireguard-tools openvpn proxychains4
+apt-get install -y --no-install-recommends git python3 python3-venv ca-certificates iproute2 nftables procps wireguard-tools openvpn proxychains4
 python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ is required"'
 install -d -m 0755 -- "$prefix"
 python3 -m venv "$prefix/venv"
@@ -47,5 +47,9 @@ fi
 "$prefix/venv/bin/splitforge" doctor
 if ((restore)); then
   "$prefix/venv/bin/splitforge" restore
+fi
+if revision=$(git -C "$source_dir" rev-parse --verify HEAD 2>/dev/null); then
+  printf '%s\n' "$revision" > "$prefix/.splitforge-revision"
+  chmod 0644 "$prefix/.splitforge-revision"
 fi
 printf '\nSplitForge installed. Run: sudo splitforge\nRead-only preview: splitforge --demo\n'
