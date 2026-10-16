@@ -12,6 +12,10 @@ skips the three privileged integration methods. Lint, package build, installed
 UI smoke test, installer upgrade/restore (empty saved state), and all local
 Markdown links / fenced Python and shell syntax checks also passed.
 
+GitHub's isolated Ubuntu 24.04 runner also passed the installer and complete
+privileged integration suite. Runtime constraints select a Python-3.10-compatible
+platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin.
+
 ## Environment
 
 - Windows workstation hosting Ubuntu 24.04 under WSL2, x86_64.

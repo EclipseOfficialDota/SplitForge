@@ -11,7 +11,8 @@ linkify-it-py==2.2.0
 markdown-it-py==4.2.0
 mdit-py-plugins==0.6.1
 mdurl==0.1.2
-platformdirs==4.13.3
+platformdirs==4.13.3; python_version >= "3.11"
+platformdirs==4.3.8; python_version < "3.11"
 psutil==7.2.2
 pydantic==2.14.1
 pydantic_core==2.50.1
