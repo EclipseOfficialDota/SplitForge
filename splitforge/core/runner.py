@@ -1,9 +1,8 @@
-"""Unprivileged application execution, service adoption and transactional swaps."""
+"""Application execution, service adoption and transactional swaps."""
 from __future__ import annotations
 
 import dataclasses
 import os
-import pwd
 import sys
 import uuid
 from pathlib import Path
@@ -26,10 +25,8 @@ class Runner:
 
     @staticmethod
     def _identity(user: str):
-        identity = pwd.getpwnam(user)
-        if identity.pw_uid == 0:
-            raise ValueError("Routed workloads must use a non-root Linux user")
-        return identity
+        import pwd
+        return pwd.getpwuid(int(user)) if user.isdecimal() else pwd.getpwnam(user)
 
     @staticmethod
     def _network(profile: Profile | None) -> list[str]:
@@ -45,16 +42,21 @@ class Runner:
     def _validate_service(self, app: AppBinding):
         if not app.service:
             return
-        properties = run(["systemctl", "show", app.service, "--property=User,LoadState,ExecStart,TriggeredBy"]).stdout
+        properties = run(["systemctl", "show", app.service, "--property=User,LoadState,Id,Names,TriggeredBy"]).stdout
         values = dict(line.split("=", 1) for line in properties.splitlines() if "=" in line)
         if values.get("LoadState") != "loaded":
             raise ValueError("Service is not loaded")
-        self._identity(values.get("User") or "root")
-        if values.get("User") != app.user:
-            raise ValueError("Registered user must match the service's User= setting")
+        names = set(values.get("Names", "").split()) | {values.get("Id", ""), app.service}
+        protected = {"ssh.service", "sshd.service", "networking.service", "NetworkManager.service",
+                     "systemd-networkd.service", "systemd-resolved.service"}
+        if names & protected or any(n.startswith(("ssh@", "sshd@")) for n in names):
+            raise ValueError("SSH and host networking services cannot be routed")
+        service_identity = self._identity(values.get("User") or "root")
+        if service_identity.pw_uid != self._identity(app.user).pw_uid:
+            raise ValueError("Registered user must match the service's effective user")
         if values.get("TriggeredBy"):
             raise ValueError("Socket-activated services must be converted to ordinary services first")
-        if app.service.startswith(("splitforge-", "user@")):
+        if any(name.startswith(("splitforge-", "user@")) for name in names):
             raise ValueError("Use bind_user for user managers; internal units cannot be adopted")
 
     def _render(self, app: AppBinding, profile: Profile | None) -> str:
@@ -70,7 +72,7 @@ class Runner:
         command = " ".join(unit_word(a) for a in app.argv)
         return (f"[Unit]\nDescription=SplitForge application {app.id}\n{dependencies}\n"
                 f"[Service]\nType=exec\nUser={app.user}\n"
-                f"WorkingDirectory={unit_word(app.cwd)}\nExecStart={command}\n"
+                f"WorkingDirectory={app.cwd.replace('%', '%%')}\nExecStart={command}\n"
                 f"Restart=on-failure\nRestartSec=3\nKillMode=control-group\nTimeoutStopSec=20\n"
                 f"{network}\n{hardening}\n[Install]\nWantedBy=multi-user.target\n")
 
@@ -127,8 +129,10 @@ class Runner:
         require_root()
         with self.store.operation(app_id):
             app = self.store.app(app_id)
-            run(["systemctl", "stop", self.unit(app)])
-            if not app.service:
+            managed = self._path(app).exists()
+            if managed or app.service:
+                run(["systemctl", "stop", self.unit(app)])
+            if managed and not app.service:
                 run(["systemctl", "disable", self.unit(app)])
             self.store.save_app(dataclasses.replace(app, enabled=False))
 
@@ -153,7 +157,8 @@ class Runner:
             raise FileNotFoundError(argv[0])
         argv = [executable, *argv[1:]]
         bound = self.store.snapshot()["users"].get(user)
-        profile = self.store.profile(profile_name or bound) if profile_name or bound else None
+        profile = (None if profile_name == "direct" else
+                   self.store.profile(profile_name or bound) if profile_name or bound else None)
         if profile:
             self.manager.start(profile.id)
         args = ["systemd-run", "--quiet", "--wait", "--collect",

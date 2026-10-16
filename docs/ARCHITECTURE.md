@@ -9,7 +9,7 @@ failure behavior still need Linux testing; diagrams are not validation evidence.
 
 The root control plane imports configuration, owns state, creates namespaces,
 configures nftables and generates systemd units. Managed applications run as
-non-root users with capabilities removed and `NoNewPrivileges=yes`.
+root or ordinary users with capabilities removed and `NoNewPrivileges=yes`.
 
 ```mermaid
 sequenceDiagram
@@ -129,7 +129,8 @@ The namespace deny policy is installed before connecting the host veth. It:
 It deliberately does not grant all established connections an output exemption
 that could bypass the egress-interface checks. Losing the tunnel should leave
 traffic blocked; it does not install a secondary Direct default route. This
-behavior is an implementation intention pending kernel-level failure tests.
+behavior is exercised by local Linux namespace/core-loss tests; see
+[the validation record](VALIDATION.md) for scope and remaining coverage.
 
 The local DNS stub accepts UDP/TCP requests up to its size limit and makes
 certificate-verified HTTPS requests to the configured bootstrap IP. Both worker

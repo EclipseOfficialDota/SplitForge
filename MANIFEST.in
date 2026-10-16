@@ -1,0 +1,3 @@
+include install.sh requirements.lock LICENSE README.md SECURITY.md CONTRIBUTING.md CHANGELOG.md
+recursive-include docs *.md *.svg
+recursive-include tests *.py

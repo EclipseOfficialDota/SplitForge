@@ -2,7 +2,8 @@
 
 [Home](../README.md) · [Tutorial](GETTING_STARTED.md) · [API](API.md)
 
-This describes implemented adapters, not verified interoperability. A parsed
+This describes implemented adapters. [Validation](VALIDATION.md) records which
+transports have been exercised against controlled local servers. A parsed
 profile can still fail configuration validation, authentication or reachability.
 Use the privileged stable Python environment from the tutorial.
 
@@ -207,7 +208,13 @@ print(manager.missing('vless'))
 ```
 
 These check executable discovery, not version/kernel/server compatibility.
-There is no auto-installer UI yet. Upstream projects:
+The Logs & Tools screen and `splitforge dependencies install NAME` install
+distribution tools or pinned, SHA-256-verified upstream releases. Xray is pinned
+to v26.3.27, tun2socks to v2.7.0, and Slipstream to v0.1.1. DNSTT builds revision
+`17aa1fed864cd5493e3d09a14df1b8b5cc1df123` from verified source. Its build requires
+Go 1.24.4+; an isolated verified Go 1.26.1 toolchain is fetched if needed.
+See [installation](GETTING_STARTED.md) for offline artifacts and diagnostics.
+Upstream projects:
 
 - [Xray releases](https://github.com/XTLS/Xray-core/releases)
 - [tun2socks releases](https://github.com/xjasonlyu/tun2socks/releases)

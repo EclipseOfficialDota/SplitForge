@@ -1,6 +1,6 @@
 # Security model and reporting
 
-SplitForge Part 1 is a privileged Linux networking backend under development.
+SplitForge is a privileged Linux networking application with a terminal UI and CLI.
 There is no completed security audit or production/SSH-safety certification.
 
 ## Boundaries
@@ -8,17 +8,18 @@ There is no completed security audit or production/SSH-safety certification.
 - The control plane and protocol helpers run with root authority. Trust the
   machine administrator, installed Python code, systemd, kernel and upstream
   binaries. Keep their directories root-controlled.
-- Managed workloads must use non-root accounts. Generated units remove
+- Managed workloads may use root or an ordinary account. Generated units remove
   capabilities and enable `NoNewPrivileges`; this does not turn a network
   namespace into a complete sandbox for hostile programs.
 - Apps assigned to one profile share its namespace. They can share local network
   resources and aggregate counters; this is not per-app security separation.
-- Namespace guards intend to block Direct fallback. DNS/IPv6/failure behavior
-  still needs live kernel testing. Proxychains mode does not provide that guard.
+- Namespace guards deny Direct fallback. Local Linux tests exercise DNS, IPv6
+  disabling and blocked underlay access after core loss; see docs/VALIDATION.md. Proxychains mode does not provide that guard.
 - Host control-plane DNS/transport is separate from application DNS. Local Unix
   sockets, host services, unrelated proxies, filesystem access and root compromise
   need additional controls outside this project's present scope.
-- Existing root services and socket-activated services are rejected for adoption.
+- Existing root services are supported. SSH/network infrastructure and
+  socket-activated services are rejected for adoption.
   User-manager binding is not live UID-wide routing or SSH-session migration.
 
 ## Configuration secrets

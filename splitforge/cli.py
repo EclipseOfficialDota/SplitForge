@@ -1,0 +1,344 @@
+"""Public CLI. All workload commands are argument arrays, never shell strings."""
+from __future__ import annotations
+
+import dataclasses
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import typer
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+
+from splitforge import __version__
+from splitforge.core.netns import require_root, run
+from splitforge.core.runner import Runner
+from splitforge.protocols.manager import ProtocolManager
+from splitforge.state import AppBinding, StateStore
+
+app = typer.Typer(no_args_is_help=False, help="SplitForge — per-application Linux tunnel routing.")
+profiles = typer.Typer(help="Import, start, inspect and remove tunnel profiles.")
+apps = typer.Typer(help="Register scripts, binaries and existing services.")
+deps = typer.Typer(help="Inspect or install protocol dependencies.")
+users = typer.Typer(help="Route future systemd user-manager workloads.")
+app.add_typer(profiles, name="profile")
+app.add_typer(apps, name="app")
+app.add_typer(deps, name="dependencies")
+app.add_typer(users, name="user")
+console = Console()
+
+
+def objects(ctx: typer.Context):
+    store = StateStore(ctx.find_root().obj["state"])
+    manager = ProtocolManager(store)
+    return store, manager, Runner(store, manager)
+
+
+def app_by_name(store: StateStore, value: str) -> AppBinding:
+    matches = [a for a in store.apps() if value in (a.name, a.id)]
+    if len(matches) != 1:
+        raise ValueError("Application not found or ambiguous; use its ID")
+    return matches[0]
+
+
+def print_rows(title, columns, rows):
+    table = Table(title=title, header_style="bold cyan", border_style="bright_black")
+    for column in columns:
+        table.add_column(column)
+    for row in rows:
+        table.add_row(*(Text(str(value)) for value in row))
+    console.print(table)
+
+
+@app.callback(invoke_without_command=True)
+def entry(ctx: typer.Context,
+          state: Path = typer.Option(Path("/etc/splitforge/state.json"), "--state", envvar="SPLITFORGE_STATE"),
+          demo: bool = typer.Option(False, "--demo", help="Open the read-only UI demo without root/network changes."),
+          version: bool = typer.Option(False, "--version", is_eager=True)):
+    if version:
+        console.print(__version__)
+        raise typer.Exit()
+    ctx.obj = {"state": state}
+    if ctx.invoked_subcommand is None:
+        if not demo:
+            require_root()
+        from splitforge.tui.app import SplitForgeApp
+        SplitForgeApp(state_path=state, demo=demo).run()
+
+
+@profiles.command("list")
+def profile_list(ctx: typer.Context, as_json: bool = typer.Option(False, "--json")):
+    store, _, _ = objects(ctx)
+    rows = [{"id": p.id, "name": p.name, "protocol": p.protocol, "exit_ip": p.exit_ip,
+             "country": p.country} for p in store.profiles()]
+    if as_json:
+        typer.echo(json.dumps(rows))
+    else:
+        print_rows("Profiles", ["ID", "Name", "Protocol", "Last exit", "Country"],
+                   [tuple(r.values()) for r in rows])
+
+
+@profiles.command("import")
+def profile_import(ctx: typer.Context, source: str, name: str | None = None,
+                   uri_file: bool = typer.Option(False, "--uri-file", help="Read a private URI from this file."),
+                   replace: str | None = typer.Option(None, "--replace", help="Replace a stopped profile without changing its assignments.")):
+    require_root()
+    _, manager, _ = objects(ctx)
+    profile = manager.import_profile(Path(source).read_text().strip() if uri_file else source, name=name, replace_id=replace)
+    typer.echo(f"{profile.id} {profile.name}")
+
+
+@profiles.command("dns-tunnel")
+def dns_tunnel(ctx: typer.Context, name: str, protocol: str, domain: str, resolver: str,
+               public_key_file: Path | None = None, certificate: Path | None = None):
+    require_root()
+    _, manager, _ = objects(ctx)
+    profile = manager.dns_tunnel(name, protocol, domain, resolver,
+        public_key=public_key_file.read_text().strip() if public_key_file else "",
+        certificate=str(certificate) if certificate else "")
+    typer.echo(f"{profile.id} {profile.name}")
+
+
+@profiles.command("start")
+def profile_start(ctx: typer.Context, name: str):
+    objects(ctx)[1].start(name)
+    typer.echo("Profile started and enabled for boot")
+
+
+@profiles.command("stop")
+def profile_stop(ctx: typer.Context, name: str):
+    objects(ctx)[1].stop(name)
+    typer.echo("Profile stopped and disabled for boot")
+
+
+@profiles.command("test")
+def profile_test(ctx: typer.Context, name: str):
+    require_root()
+    typer.echo(json.dumps(objects(ctx)[1].test(name)))
+
+
+@profiles.command("dns")
+def profile_dns(ctx: typer.Context, name: str, url: str, bootstrap: str):
+    require_root()
+    store, manager, _ = objects(ctx)
+    profile = store.profile(name)
+    if manager.netns.exists(profile):
+        raise ValueError("Stop the profile before changing DNS")
+    updated = dataclasses.replace(profile, doh_url=url, doh_ip=bootstrap)
+    store.save_profile(updated)
+    typer.echo("DNS saved")
+
+
+@profiles.command("remove")
+def profile_remove(ctx: typer.Context, name: str):
+    require_root()
+    store, manager, _ = objects(ctx)
+    profile = store.profile(name)
+    snapshot = store.snapshot()
+    if any(a["profile_id"] == profile.id for a in snapshot["apps"].values()) or profile.id in snapshot["users"].values():
+        raise ValueError("Reassign/remove all application and user references first")
+    unit = Path("/etc/systemd/system", f"splitforge-profile-{profile.id}.service")
+    if unit.exists():
+        manager.stop(profile.id)
+        unit.unlink()
+        run(["systemctl", "daemon-reload"])
+    elif manager.netns.exists(profile):
+        raise ValueError("Orphan namespace detected; inspect and repair its profile unit before removing state")
+    store.delete_profile(profile.id)
+    typer.echo("Profile removed")
+
+
+@profiles.command("probe")
+def profile_probe(ctx: typer.Context, name: str,
+                  url: str = typer.Option("https://www.cloudflare.com/cdn-cgi/trace", "--url"),
+                  tls_ca_file: Path | None = typer.Option(None, "--tls-ca-file")):
+    """Set a verified HTTPS trace endpoint/custom CA for private environments."""
+    require_root()
+    store, manager, _ = objects(ctx)
+    profile = store.profile(name)
+    if manager.netns.exists(profile):
+        raise ValueError("Stop the profile before changing the probe")
+    if tls_ca_file and not tls_ca_file.is_file():
+        raise ValueError("CA bundle does not exist")
+    store.save_profile(dataclasses.replace(profile, probe_url=url,
+        tls_ca_file=str(tls_ca_file.resolve()) if tls_ca_file else ""))
+    typer.echo("Verified HTTPS probe settings saved; custom CA also applies to this profile's DoH stub")
+
+
+@apps.command("add", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def app_add(ctx: typer.Context, name: str,
+            user: str = typer.Option("root", "--user"),
+            cwd: str = typer.Option("/", "--cwd"),
+            service: str | None = typer.Option(None, "--service")):
+    require_root()
+    store, _, runner = objects(ctx)
+    if any(a.name == name for a in store.apps()):
+        raise ValueError("Application name already exists")
+    argv = list(ctx.args)
+    if argv and argv[0] == "--":
+        argv.pop(0)
+    if argv:
+        executable = shutil.which(argv[0])
+        if not executable:
+            raise FileNotFoundError(argv[0])
+        argv[0] = executable
+    binding = AppBinding(name, argv, user=user, cwd=cwd, service=service)
+    runner._identity(user)
+    runner._validate_service(binding)
+    store.save_app(binding)
+    typer.echo(f"{binding.id} {binding.name}")
+
+
+@apps.command("list")
+def app_list(ctx: typer.Context):
+    store, _, _ = objects(ctx)
+    names = {p.id: p.name for p in store.profiles()}
+    print_rows("Applications", ["ID", "Name", "User", "Profile", "Enabled intent"],
+               [(a.id, a.name, a.user, names.get(a.profile_id, "Direct"), a.enabled) for a in store.apps()])
+
+
+@app.command("bind")
+def bind(ctx: typer.Context, target: str, profile: str = typer.Option("direct", "--profile"),
+         stopped: bool = typer.Option(False, "--stopped")):
+    store, _, runner = objects(ctx)
+    runner.bind(app_by_name(store, target).id, None if profile == "direct" else profile, start=not stopped)
+    typer.echo("Assignment applied" + ("; application left stopped" if stopped else "; application restarted"))
+
+
+@apps.command("stop")
+def app_stop(ctx: typer.Context, target: str):
+    store, _, runner = objects(ctx)
+    runner.stop(app_by_name(store, target).id)
+
+
+@apps.command("remove")
+def app_remove(ctx: typer.Context, target: str):
+    store, _, runner = objects(ctx)
+    runner.remove(app_by_name(store, target).id)
+
+
+@app.command("exec", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def execute(ctx: typer.Context, profile: str | None = typer.Option(None, "--profile"),
+            user: str = typer.Option("root", "--user"), cwd: str | None = typer.Option(None, "--cwd"),
+            proxychains: bool = typer.Option(False, "--proxychains")):
+    _, _, runner = objects(ctx)
+    argv = list(ctx.args)
+    if argv and argv[0] == "--":
+        argv.pop(0)
+    if not argv:
+        raise ValueError("Supply a command after --")
+    if proxychains:
+        if not profile or profile == "direct":
+            raise ValueError("Proxychains requires a proxy profile")
+        code = runner.proxychains(profile, argv, user=user)
+    else:
+        # Explicit Direct must not accidentally inherit a saved user mapping.
+        code = runner.execute(argv, profile_name=profile, user=user, cwd=cwd)
+    raise typer.Exit(code)
+
+
+@users.command("bind")
+def user_bind(ctx: typer.Context, user: str, profile: str):
+    unit = objects(ctx)[2].bind_user(user, None if profile == "direct" else profile)
+    typer.echo(f"Saved. Apply by deliberately restarting {unit}; existing user workloads may stop.")
+
+
+@app.command("status")
+def status(ctx: typer.Context, as_json: bool = typer.Option(False, "--json")):
+    store, manager, runner = objects(ctx)
+    live = sys.platform == "linux" and shutil.which("systemctl") is not None
+    rows = [manager.status(p.id) if live else {"id": p.id, "name": p.name, "active": False,
+            "namespace": False, "exit_ip": p.exit_ip, "latency_ms": p.latency_ms} for p in store.profiles()]
+    applications = [{"id": a.id, "name": a.name, "user": a.user, "profile_id": a.profile_id,
+                     "running": runner.running(a) if live else False} for a in store.apps()]
+    if as_json:
+        typer.echo(json.dumps({"profiles": rows, "apps": applications}))
+    else:
+        print_rows("Tunnel lifecycle (use profile test for fresh egress)", ["ID", "Name", "Unit", "Namespace", "Last exit"],
+                   [(r["id"], r["name"], r["active"], r["namespace"], r["exit_ip"]) for r in rows])
+        print_rows("Applications", ["ID", "Name", "User", "Running"],
+                   [(r["id"], r["name"], r["user"], r["running"]) for r in applications])
+
+
+@app.command("logs")
+def logs(follow: bool = typer.Option(False, "--follow", "-f"), unit: str = typer.Option("splitforge-*", "--unit")):
+    require_root()
+    if not unit.startswith("splitforge-") or any(c in unit for c in "\n\r\0"):
+        raise ValueError("Choose a SplitForge unit or splitforge-* pattern")
+    raise typer.Exit(subprocess.call(["journalctl", "--no-pager", "-n", "100", "-u", unit, *(["-f"] if follow else [])]))
+
+
+@deps.command("list")
+def dependencies_list():
+    tools = ["ip", "nft", "systemctl", "systemd-run", "wg", "openvpn", "xray", "tun2socks",
+             "dnstt-client", "slipstream-client", "proxychains4"]
+    print_rows("Dependencies", ["Binary", "Path"], [(name, shutil.which(name) or "MISSING") for name in tools])
+
+
+@deps.command("install")
+def dependencies_install(name: str):
+    from splitforge.core.dependencies import install
+    typer.echo(install(name))
+
+
+@app.command("doctor")
+def doctor():
+    linux = sys.platform == "linux"
+    checks = {"linux": linux, "root": linux and os.geteuid() == 0,
+              "systemd_pid1": linux and Path("/proc/1/comm").read_text().strip() == "systemd",
+              "tun_device": Path("/dev/net/tun").exists(),
+              **{tool: bool(shutil.which(tool)) for tool in ["ip", "nft", "systemctl", "systemd-run", "sysctl"]}}
+    print_rows("Platform preflight", ["Check", "Result"], [(k, "OK" if v else "MISSING") for k, v in checks.items()])
+    if not all(checks.values()):
+        raise typer.Exit(1)
+
+
+@app.command("restore")
+def restore(ctx: typer.Context):
+    require_root()
+    store, manager, runner = objects(ctx)
+    bindings = store.apps()
+    needed = {a.profile_id for a in bindings if a.enabled and a.profile_id} | set(store.snapshot()["users"].values())
+    for profile in store.profiles():
+        enabled = run(["systemctl", "is-enabled", "--quiet", f"splitforge-profile-{profile.id}.service"], check=False).returncode == 0
+        if enabled or profile.id in needed:
+            manager.start(profile.id)
+    for binding in bindings:
+        if binding.enabled:
+            runner.bind(binding.id, binding.profile_id)
+    typer.echo("Enabled workload assignments restored")
+
+
+@app.command("stop-all")
+def stop_all(ctx: typer.Context, preserve: bool = typer.Option(False, "--preserve", help="Keep boot/assignment intent for upgrade restore.")):
+    require_root()
+    store, manager, runner = objects(ctx)
+    for binding in store.apps():
+        if preserve:
+            run(["systemctl", "stop", runner.unit(binding)], check=False)
+        else:
+            runner.stop(binding.id)
+    for profile in store.profiles():
+        unit = f"splitforge-profile-{profile.id}.service"
+        if Path("/etc/systemd/system", unit).exists():
+            if preserve:
+                run(["systemctl", "stop", unit], timeout=130)
+            else:
+                manager.stop(profile.id)
+    typer.echo("Workloads stopped; state retained")
+
+
+def main():
+    try:
+        app()
+    except (OSError, ValueError, KeyError, RuntimeError, subprocess.TimeoutExpired) as error:
+        Console(stderr=True).print(Text(f"SplitForge: {error}", style="red"))
+        raise SystemExit(1) from None
+
+
+if __name__ == "__main__":
+    main()

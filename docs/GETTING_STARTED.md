@@ -1,443 +1,253 @@
-# Hands-on backend tutorial
+# Installation and hands-on tutorial
 
-[Home](../README.md) · [فارسی](README.fa.md) · [Protocols](PROTOCOLS.md) ·
-[Troubleshooting](TROUBLESHOOTING.md)
-
-This guide uses the **current Part 1 Python API**. Examples target a disposable
-Ubuntu/Debian VPS or VM with systemd. Linux integration testing is pending;
-these instructions are a developer lab workflow, not a certified deployment.
-No command in this document was executed on your VPS while writing it.
-
-## Contents
-
-1. [Requirements](#requirements)
-2. [Validation levels](#validation-levels)
-3. [Manual Linux lab setup](#manual-linux-lab-setup)
-4. [First WireGuard profile](#first-wireguard-profile)
-5. [One-off execution](#one-off-execution)
-6. [Persistent Python application](#persistent-python-application)
-7. [Reassignment and Direct mode](#reassignment-and-direct-mode)
-8. [Existing systemd services](#existing-systemd-services)
-9. [User-manager binding](#user-manager-binding)
-10. [Inspection, stop and cleanup](#inspection-stop-and-cleanup)
-11. [Updating](#updating-the-manual-installation)
+[README](../README.md) · [فارسی](README.fa.md) · [Protocols](PROTOCOLS.md) · [Troubleshooting](TROUBLESHOOTING.md)
 
 ## Requirements
 
-| Requirement | Reason |
-| --- | --- |
-| Linux with root/sudo | Namespace, nftables and system service mutations are privileged |
-| Python 3.10+ | Conservative development baseline for the source |
-| systemd as PID 1 | Runner and profile lifecycle create system services |
-| Modern systemd; 249+ suggested for the lab | Namespace, transient-service and credential features are used |
-| `/dev/net/tun` and network namespace support | Provider/container restrictions can prevent their use |
-| Kernel WireGuard support for WireGuard profiles | Tools alone do not supply every kernel capability |
-| Working upstream configuration | SplitForge does not supply a subscription or remote server |
-| Non-root workload account | The runner rejects UID 0 |
-| Provider console for recovery | Tests do not certify SSH behavior |
+Linux with systemd as PID 1, Python 3.10+, `/dev/net/tun`, nftables, network
+namespaces and root access. Ubuntu 22.04/24.04 and Debian 12/13 are installer
+targets; restricted containers may deny required kernel operations. Native
+Windows/macOS cannot run the engine. The recorded integration system is Ubuntu
+24.04 under WSL2 with systemd. See [actual validation](VALIDATION.md).
 
-Ubuntu 22.04/24.04 and Debian 12 are reasonable **lab targets**, not certified
-platforms. Native Windows/macOS, restricted containers, and WSL without suitable
-systemd/kernel capabilities cannot be assumed to run the networking backend.
+Reserve `10.203.0.0/18`, routing tables 20001–24095 and priorities 12001–16095.
+Review [resource ownership](ARCHITECTURE.md#owned-names-and-address-space)
+against your VPN/container addressing and firewall. Host firewall managers can
+still reject traffic that SplitForge's own table permits.
 
-```sh
-python3 --version
-ps -p 1 -o comm=
-systemd --version
-uname -r
-test -c /dev/net/tun && echo 'TUN device available'
-```
+The operator uses root. Workloads can use root or existing ordinary accounts.
+Root scripts can read `/root`; their capabilities are still removed. Choose
+dedicated accounts when practical. Root programs must be trusted.
 
-Do not prepare the machine by replacing its default route, globally activating
-a VPN, or flushing an existing firewall. The backend's owned resources are
-described in [Architecture](ARCHITECTURE.md).
-
-## Validation levels
-
-The recorded Windows run passed nine checks and skipped the POSIX state test.
-They cover URI parsing, forbidden directives, argument escaping, command scope
-and guard generation. The POSIX test exercises state persistence/references.
-
-| Level | Establishes | Current evidence |
-| --- | --- | --- |
-| Unit/parser checks | Python logic and selected generated commands | Recorded local run |
-| Root Linux integration | Real namespaces, nftables, interfaces and systemd | Pending |
-| Protocol interoperability | Real connections to configured upstreams | Pending |
-| Failure testing | Kill switch, DNS, restart and rollback behavior | Pending |
-| Reboot/upgrade testing | Persistent units recover correctly | Pending |
-
-The first row does not establish the others. Run the checks without root:
-
-```sh
-git clone https://github.com/EclipseOfficialDota/SplitForge.git
-cd SplitForge
-python3 -m unittest discover -s tests -v
-```
-
-## Manual Linux lab setup
-
-There is no public CLI or package metadata yet. This temporary setup copies the
-stdlib-only backend into a stable root-owned Python virtual environment so
-systemd can import helpers after your shell exits.
-
-### 1. Install distribution tools
+## Install
 
 ```sh
 sudo apt-get update
-sudo apt-get install --no-install-recommends \
-  python3 python3-venv git ca-certificates curl \
-  iproute2 nftables procps
-
-# Install the adapters you plan to exercise:
-sudo apt-get install --no-install-recommends wireguard-tools openvpn
-
-# Optional TCP fallback wrapper:
-sudo apt-get install --no-install-recommends proxychains4
+sudo apt-get install -y git
+git clone https://github.com/EclipseOfficialDota/SplitForge.git
+cd SplitForge
+sudo bash install.sh
+sudo splitforge doctor
 ```
 
-Proxy profiles additionally need `xray` and `tun2socks`; DNSTT needs
-`dnstt-client`, and Slipstream needs `slipstream-client`. Download/build them
-from the official projects linked in [Protocols](PROTOCOLS.md). Match CPU
-architecture and verify the upstream integrity information. Versions are not
-pinned here, and matching CLI/configuration formats must be checked.
-
-Place binaries in a root-controlled system path such as `/usr/local/bin`.
-Aliases and login-shell-only PATH changes are not sufficient for systemd.
-No global nftables service activation or host firewall replacement is required
-by these instructions.
-
-### 2. Deploy a stable source copy
-
-The following source and venv paths must be new for first-time setup:
+Installed resources: distribution tools (iproute2/nftables/procps/WireGuard/
+OpenVPN/proxychains4); an isolated `/opt/splitforge/venv`; Python dependencies
+constrained by `requirements.lock`; verified Xray/tun2socks binaries under
+`/usr/local/bin`; a public launcher symlink. Private `/etc/splitforge` uses
+directory mode 0700 and state mode 0600. Privileged helpers import the installed
+package. The source and installation prefix must be administrator-controlled.
 
 ```sh
-sudo install -d -m 0755 /opt/splitforge
-sudo git clone https://github.com/EclipseOfficialDota/SplitForge.git /opt/splitforge/source
-sudo python3 -m venv /opt/splitforge/venv
-
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-import shutil
-import sysconfig
-from pathlib import Path
-
-source = Path('/opt/splitforge/source/splitforge')
-target = Path(sysconfig.get_paths()['purelib']) / 'splitforge'
-if target.exists():
-    raise SystemExit('Package exists; follow the update section instead.')
-shutil.copytree(source, target)
-print('Installed backend:', target)
-PY
+sudo bash install.sh --prefix /opt/splitforge
+sudo bash install.sh --skip-proxy-cores
+sudo splitforge dependencies list
+sudo splitforge dependencies install slipstream-client
+sudo splitforge dependencies install dnstt-client
 ```
 
-There are no third-party Python imports in the present backend. The planned
-Textual/Rich/Typer distribution does not exist yet, and `pip install .` cannot
-replace the manual copy while package metadata is absent.
+`--skip-proxy-cores` skips Xray/tun2socks downloads only. DNSTT builds from
+pinned, SHA-256-verified source. It uses Go 1.24.4+ or downloads a verified
+isolated compiler; module checksum verification remains enabled. Registry or
+GitHub filtering can block builds. Private failure diagnostics are saved to
+`/var/log/splitforge-install.log`.
 
-Verify importability outside the checkout:
+Set `SPLITFORGE_DOWNLOAD_CACHE` to a directory of pre-fetched official release
+filenames to supply core/compiler/source artifacts offline. DNSTT source uses
+its pinned revision as filename. The same hashes apply and symlinks are
+rejected. This does not cache apt, pip or Go module dependencies.
+
+## Terminal workflow
 
 ```sh
-cd /tmp
-sudo /opt/splitforge/venv/bin/python -c \
-  'import splitforge; print(splitforge.__file__)'
+splitforge --demo
+sudo splitforge
 ```
 
-The printed path should be in venv site-packages. Keep the interpreter at this
-absolute path; generated profile units record `sys.executable`.
+Demo mode is read-only and uses synthetic documentation addresses. Real mode
+has six pages: Home, App Router, VPN Profiles, Add/Browse, Security/DNS and Logs.
+Mouse or 1–6 switches pages; Tab/arrows/Enter navigate; A adds an app, N adds a
+profile, C opens route selection, T tests active profiles, R refreshes and Q
+exits. Escape closes dialogs. Recommended size: 120×40 or larger.
 
-### 3. Create a workload account
+Closing the UI leaves supervised services running. Wait for in-progress
+operations before exit. Active lifecycle is distinct from fresh egress health;
+test a profile for a current result. Bandwidth is shared per-interface RX/TX,
+not per-app billing, and resets with interface recreation. HTTPS timing includes
+DNS/TLS/retries and is not ICMP ping.
+
+## First tunnel
+
+Keep real credentials under a mode-0700 directory, with files mode 0600, e.g.
+`/root/splitforge-profiles/client.conf`. WireGuard needs an IPv4 Address and a
+peer covering `0.0.0.0/0`. Provider lifecycle hooks are rejected.
 
 ```sh
-sudo useradd --system --create-home \
-  --home-dir /var/lib/splitforge-demo \
-  --shell /usr/sbin/nologin splitforge-demo
-sudo install -d -m 0755 /srv/splitforge-demo
-sudo install -d -m 0700 /root/splitforge-profiles
+sudo splitforge profile import /root/splitforge-profiles/client.conf --name wg-europe
+sudo splitforge profile start wg-europe
+sudo splitforge profile test wg-europe
+sudo splitforge status
 ```
 
-Inspect an existing demo account instead of recreating it. Securely place a
-genuine WireGuard configuration at `/root/splitforge-profiles/client.conf`:
+Import saves configuration without starting it. Start creates/enables the
+profile unit and requires verified HTTPS egress plus DNS. Failure cleans up;
+there is no direct fallback. Names or IDs select profiles.
+
+For subscription URIs, avoid shell-history/process-list exposure by saving the
+URI in a private file with your editor:
 
 ```sh
-sudo chmod 0600 /root/splitforge-profiles/client.conf
+sudo splitforge profile import /root/splitforge-profiles/private.uri --uri-file --name proxy-europe
+sudo splitforge profile import /root/splitforge-profiles/client.ovpn --name openvpn-europe
+sudo splitforge profile import /root/splitforge-profiles/outbound.json --name xray-europe
 ```
 
-Private profile files should stay outside this Git repository. Imports copy
-secrets into state; do not paste private URIs into shell history or public Issues.
+Xray imports accept one outbound, without custom bypass routing/inbounds.
+OpenVPN rejects scripts/plugins/includes. Referenced certificate/key files must
+remain available; use [protocol-specific guidance](PROTOCOLS.md).
 
-## First WireGuard profile
-
-The file needs an IPv4 `Address` and a peer with `AllowedIPs = 0.0.0.0/0`.
-Hooks, `Table` and `SaveConfig` are rejected. Its `DNS` setting is replaced by
-SplitForge's namespace-local DoH resolver.
+## Execute once
 
 ```sh
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-from splitforge.state import StateStore
-from splitforge.protocols.manager import ProtocolManager
-
-store = StateStore()
-manager = ProtocolManager(store)
-existing = [p for p in store.profiles() if p.name == 'wg-lab']
-profile = existing[0] if existing else manager.import_profile(
-    '/root/splitforge-profiles/client.conf', name='wg-lab'
-)
-print('Profile ID:', profile.id)
-print('Missing tools:', manager.missing(profile.protocol))
-manager.start(profile.id)
-print('Egress:', manager.test(profile.id))
-print('Lifecycle:', manager.status(profile.id))
-PY
+sudo splitforge exec --profile wg-europe --user root --cwd /root -- /usr/bin/python3 /root/bot.py
+sudo splitforge exec --profile wg-europe --user www-data -- /usr/bin/curl https://example.com
+sudo splitforge exec --profile direct --user root -- /usr/bin/id
 ```
 
-`start()` creates and enables the persistent profile boot unit and runs a live
-DNS/HTTPS check. Failure triggers teardown attempts. Inspect journals if any
-resource remains after failure.
+Put `--` before the executable. Arguments are literal; use `/bin/sh -c` only
+when deliberately requesting a shell. Use the application's own venv interpreter
+when needed. CLI defaults to root; Python API defaults remain `nobody`.
+`exec` waits and returns the command's exit code. It does not register a service.
+Explicit Direct bypasses user mappings; an omitted profile can inherit one.
 
-`test()` contacts `https://www.cloudflare.com/cdn-cgi/trace` from the namespace.
-It extracts the observed IPv4 address and country code. `latency_ms` includes
-retries, DNS, TLS and HTTP: it is not ICMP or server-only latency. Success proves
-reachability to that endpoint at that moment, not every destination/protocol.
-
-`status()['active']` reflects the systemd profile unit, not a fresh upstream
-reachability test. Stored exit IP and latency can be stale.
-
-## One-off execution
-
-Run one HTTPS request as the non-root demo user:
+## Persistent apps and reassignment
 
 ```sh
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-from splitforge.state import StateStore
-from splitforge.protocols.manager import ProtocolManager
-from splitforge.core.runner import Runner
-
-store = StateStore()
-runner = Runner(store, ProtocolManager(store))
-command = [
-    '/usr/bin/python3', '-c',
-    "import urllib.request; "
-    "o=urllib.request.build_opener(urllib.request.ProxyHandler({})); "
-    "print(o.open('https://www.cloudflare.com/cdn-cgi/trace', timeout=10).read().decode())"
-]
-raise SystemExit(runner.execute(
-    command, profile_name='wg-lab', user='splitforge-demo', cwd='/tmp'
-))
-PY
+sudo splitforge app add telegram-bot --user root --cwd /root/bot -- /root/bot/venv/bin/python /root/bot/main.py
+sudo splitforge bind telegram-bot --profile wg-europe
+sudo splitforge app list
+sudo splitforge bind telegram-bot --profile proxy-europe
+sudo splitforge bind telegram-bot --profile direct
+sudo splitforge app stop telegram-bot
 ```
 
-This uses a transient service and returns the wrapper's exit status, without
-creating a persistent app record. Interactive execution uses systemd PTY mode
-when stdin/stdout are terminals; otherwise the wrapper uses pipe mode.
+Registration does not launch the command. Bind creates/starts/enables a
+`splitforge-app-<id>.service`, with restart-on-failure. `bind --stopped` saves
+the assignment without starting it. Explicit app stop disables generated boot
+intent. Reassignment stops the previous service, updates namespace properties
+and restarts; startup failure attempts to restore the previous unit/assignment.
+Application memory/connections and data transactions are not migrated/rolled back.
 
-For your own scripts, explicitly select the interpreter:
-
-```python
-runner.execute(
-    ['/usr/bin/python3', '/srv/my-app/worker.py'],
-    profile_name='wg-lab', user='my-app-user', cwd='/srv/my-app'
-)
-runner.execute(
-    ['/bin/sh', '/srv/my-app/job.sh'],
-    profile_name='wg-lab', user='my-app-user', cwd='/srv/my-app'
-)
-```
-
-The account must already exist and have appropriate file/directory permissions.
-A file under `/root` normally needs relocation to a readable application path.
-No shell is inserted for ordinary argument arrays.
-
-If `profile_name` is omitted, `execute()` consults the saved mapping for its
-`user`. Without a mapping it uses the host network. There is no explicit
-one-off Direct override that bypasses an existing user mapping in this version.
-
-## Persistent Python application
-
-Create an egress-reporting demo:
-
-```sh
-sudo tee /srv/splitforge-demo/egress.py >/dev/null <<'PY'
-import time
-import urllib.request
-
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-while True:
-    try:
-        with opener.open('https://www.cloudflare.com/cdn-cgi/trace', timeout=10) as response:
-            print(response.read().decode(), flush=True)
-    except Exception as error:
-        print(type(error).__name__, str(error), flush=True)
-    time.sleep(60)
-PY
-sudo chmod 0644 /srv/splitforge-demo/egress.py
-```
-
-Register the command and generate/start its unit:
-
-```sh
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-from splitforge.state import AppBinding, StateStore
-from splitforge.protocols.manager import ProtocolManager
-from splitforge.core.runner import Runner
-
-store = StateStore()
-runner = Runner(store, ProtocolManager(store))
-existing = [a for a in store.apps() if a.name == 'egress-demo']
-app = existing[0] if existing else AppBinding(
-    name='egress-demo',
-    argv=['/usr/bin/python3', '/srv/splitforge-demo/egress.py'],
-    user='splitforge-demo', cwd='/srv/splitforge-demo',
-)
-store.save_app(app)
-app = runner.bind(app.id, 'wg-lab')
-print('App ID:', app.id)
-print('Unit:', runner.unit(app))
-PY
-```
-
-`save_app()` alone does not start anything. `bind()` writes the unit, starts it
-by default and enables a generated app service for boot. With `start=False`,
-it records/writes the assignment but leaves the app stopped and disables that
-generated app unit. Use the printed unit with `systemctl status` or `journalctl`.
-
-## Reassignment and Direct mode
-
-Import a second real profile as `vless-lab` using [Protocols](PROTOCOLS.md), then:
-
-```sh
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-from splitforge.state import StateStore
-from splitforge.protocols.manager import ProtocolManager
-from splitforge.core.runner import Runner
-
-store = StateStore()
-runner = Runner(store, ProtocolManager(store))
-app = next(a for a in store.apps() if a.name == 'egress-demo')
-runner.bind(app.id, 'vless-lab')
-PY
-```
-
-The destination profile is started, the app is stopped, the managed unit changes,
-and the app starts again. Existing sockets and in-memory state are lost. Failure
-triggers attempted restoration of the previous unit/state/running status, but
-rollback can itself fail. Inspect actual service state after an exception.
-
-To put this registered app on Direct instead, replace the final call with:
-
-```python
-runner.bind(app.id, None)
-```
-
-A generated app then runs in the host namespace. For an adopted service this
-removes the owned drop-in and restores its original configuration. Direct has no
-SplitForge namespace/DNS guard; original service isolation still applies if any.
+In the TUI, the process picker copies a command; it never moves the running
+process. Stop the original yourself if duplicate instances would conflict.
+File picking registers `.py`, `.sh` or executable binary commands; check their
+account, interpreter, working directory and file permissions.
 
 ## Existing systemd services
 
-The service must already be loaded, have explicit non-root `User=`, and not be
-socket activated. Root services and internal `splitforge-`/`user@` units are
-rejected by this path. For `my-worker.service` with `User=my-worker`:
-
-```python
-app = AppBinding(name='my-worker', service='my-worker.service', user='my-worker')
-store.save_app(app)
-runner.bind(app.id, 'wg-lab')
+```sh
+sudo splitforge app add my-worker --user root --service my-worker.service
+sudo splitforge bind my-worker --profile wg-europe
 ```
 
-The backend adds `/etc/systemd/system/my-worker.service.d/90-splitforge.conf`
-and restarts the service. It preserves the base unit but adds namespace,
-resolver and privilege restrictions. Those restrictions can affect applications
-requiring capabilities. The service's existing enable/disable policy is not
-owned by the runner. Removing its registration stops it and removes the owned
-drop-in; it does not automatically start the original service again.
+The service must be loaded and its effective user must match registration.
+Absent `User=` and numeric `User=0` are root and are supported. Socket-activated
+services, SplitForge internals, SSH aliases and host network/resolver services
+are rejected. Existing service hardening can conflict with mounts; inspect its
+effective configuration. The only owned drop-in is `90-splitforge.conf`.
+Direct removes the drop-in and restarts the original service. Removal stops it
+without deleting the original unit/data. Adopted boot enablement stays yours.
 
-## User-manager binding
-
-This advanced path requires a real account with UID >= 1000. Use a disposable
-lab account, not the system demo user created above:
-
-```python
-unit = runner.bind_user('labuser', 'wg-lab')
-print(unit)
-```
-
-The method writes a drop-in for `user@UID.service` and reloads systemd. It does
-not restart the manager. Applying it to a running manager requires a deliberate
-restart of the printed unit, potentially terminating its managed workloads.
-It does not move existing SSH sessions, ordinary processes, cron jobs or system
-services merely because they have the same UID. Future processes outside that
-user manager are not intercepted either.
-
-Remove the mapping/drop-in with:
-
-```python
-runner.bind_user('labuser', None)
-```
-
-A running manager needs a deliberate restart before its namespace changes.
-
-## Inspection, stop and cleanup
-
-List IDs without dumping configuration secrets:
+## Ordinary user managers
 
 ```sh
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-from splitforge.state import StateStore
-
-store = StateStore()
-for profile in store.profiles():
-    print('PROFILE', profile.id, profile.name, profile.protocol, profile.namespace)
-for app in store.apps():
-    print('APP', app.id, app.name, app.profile_id, app.enabled)
-PY
+sudo splitforge user bind worker wg-europe
+sudo splitforge user bind worker direct
 ```
 
-In the initialized privileged API context, stop the demo while keeping its
-assignment, or remove its managed unit/registration:
+This writes/removes a `user@UID.service` drop-in for UID >=1000. It affects
+future systemd user workloads after a deliberate user-manager restart, which
+interrupts that user's services. It does not capture existing shells, SSH,
+cron/system services or every arbitrary UID process. Root-wide user-manager
+binding is prohibited; route root commands/services individually.
 
-```python
-runner.stop(app.id)
-# Alternatively, for permanent app deregistration:
-runner.remove(app.id)
+## Encrypted DNS and private probes
+
+```sh
+sudo splitforge profile stop wg-europe
+sudo splitforge profile dns wg-europe https://cloudflare-dns.com/dns-query 1.1.1.1
+sudo splitforge profile start wg-europe
 ```
 
-After removing/reassigning every app/user reference to the profile:
+The bootstrap address must serve the configured hostname with a valid TLS
+certificate. Resolver requests use `127.0.0.53` inside the namespace and travel
+through the tunnel as HTTPS. DNS and kill-switch enforcement are mandatory in
+shared tunnel namespaces. Application-specific resolvers still use that app's
+namespace data path. IPv6 is disabled for this release.
 
-```python
-profile = store.profile('wg-lab')
-manager.stop(profile.id)
+For private environments, use an HTTPS trace endpoint returning `ip=<IPv4>` and
+optionally `loc=<two-letter-country>` on separate lines:
+
+```sh
+sudo splitforge profile probe wg-europe --url https://probe.example.com/trace --tls-ca-file /root/private-ca.pem
 ```
 
-Stopping disables the profile boot unit, stops owned core services and attempts
-to destroy its namespace, veth, owned route/rule and firewall table. `BindsTo=`
-may stop bound apps too; their saved `enabled` flag is not a live state report.
-Starting a profile again does not automatically restart every previously stopped
-app: explicitly restart/rebind the workloads.
+Stop the profile first. The custom CA applies to both probe and DoH; keep it
+available to root helpers. Omitting the CA option restores system trust. TLS
+verification is never disabled. Default probe/DoH use Cloudflare, which sees
+the tunnel's exit address when queried.
 
-For permanent profile deletion, first remove the **specific stopped profile
-unit**, then remove state so no boot helper points at a missing profile:
+## Replace and upgrade
 
-```python
-from pathlib import Path
-from splitforge.core.netns import run
-
-unit_path = Path('/etc/systemd/system') / f'splitforge-profile-{profile.id}.service'
-unit_path.unlink(missing_ok=True)
-run(['systemctl', 'daemon-reload'])
-store.delete_profile(profile.id)
+```sh
+sudo splitforge profile stop wg-europe
+sudo splitforge profile import /root/splitforge-profiles/new.conf --replace wg-europe
+sudo splitforge profile start wg-europe
+sudo splitforge bind telegram-bot --profile wg-europe
 ```
 
-Run this only after `manager.stop()`, with no remaining app/user references.
-Deleting state alone does not tear down networking. Keep credentials/state until
-teardown is complete. Do not flush unrelated routes or firewall rules.
+Replacement keeps the ID, subnet slot, app references, DNS and probe settings,
+and clears old measurements. Stopping a profile stops dependent apps; starting
+it does not automatically restart every app. Rebind or deliberately restore.
 
-## Updating the manual installation
+Securely back up `/etc/splitforge`, original credential files, application data
+and owned units/drop-ins before upgrading:
 
-There is no automated updater/schema migrator. Stop affected apps, unbind and
-deliberately restart lab user managers, and stop their profiles. Back up private
-state and external OpenVPN credentials with root-only permissions.
+```sh
+git pull --ff-only
+sudo bash install.sh --upgrade --restore
+sudo splitforge status
+```
 
-Fetch/review your chosen source revision. The venv holds a **copy**: updating the
-checkout alone does not change the installed package. Replace only the installed
-`splitforge` package after shutdown, retaining the absolute interpreter path.
-Re-run tests, import-test from `/tmp`, then start/test a profile before restarting
-its apps. Validate reboot recovery on the lab host before depending on it.
+Upgrade stops managed apps/profiles while preserving enabled intent, updates
+the package and optionally restores it. Without `--restore`, use
+`sudo splitforge restore` after inspection. Installation failure can leave
+workloads stopped; repair/reinstall the previous revision and restore. This is
+not transactional package/data rollback. Boot dependencies are generated, but
+provider readiness and reboot recovery must be rehearsed on your own host.
+
+## Logs, stop and remove
+
+```sh
+sudo splitforge logs --follow
+sudo splitforge status --json
+sudo splitforge app remove telegram-bot
+sudo splitforge profile stop wg-europe
+sudo splitforge profile remove wg-europe
+```
+
+Remove/reassign app and user references before deleting profiles. Teardown
+removes owned namespaces/veths/policy rules/firewall tables and runtime secrets,
+not unrelated network configuration. `stop-all` stops registered resources and
+disables generated boot intent while retaining state. `stop-all --preserve`
+retains intent for later restore.
+
+For uninstall, first unbind user managers, remove adopted/managed app
+registrations and remove profiles. Then remove the launcher symlink and chosen
+installation prefix. Keep protected backups until no longer needed. Distribution
+tools and upstream binaries can be shared; check before removing them. Review
+remaining adopted-service boot enablement separately.
+
+## Validation levels
+
+See [VALIDATION.md](VALIDATION.md) for reproducible unit/UI checks and opt-in
+privileged Linux integration. Routine tests need no provider credentials/root.

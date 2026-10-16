@@ -1,407 +1,243 @@
 # راهنمای کامل فارسی SplitForge
 
-[صفحهٔ اصلی](../README.md) · [آموزش عملی انگلیسی](GETTING_STARTED.md) ·
-[پروتکل‌ها](PROTOCOLS.md) · [مرجع API](API.md) · [عیب‌یابی](TROUBLESHOOTING.md)
+[صفحهٔ اصلی](../README.md) · [آموزش انگلیسی](GETTING_STARTED.md) · [پروتکل‌ها](PROTOCOLS.md) · [عیب‌یابی](TROUBLESHOOTING.md)
 
-## ۱. SplitForge چیست؟
+## برنامه چه کار می‌کند؟
 
-SplitForge برای انتخاب مسیر اینترنتِ هر برنامه روی سرور لینوکسی طراحی شده است.
-مثلاً ربات تلگرام از یک پروفایل WireGuard، اسکرپر از VLESS و اسکریپت پشتیبان از
-OpenVPN استفاده کنند، در حالی که برنامه‌های ثبت‌نشده و شبکهٔ اصلی سرور مسیر قبلی
-خود را داشته باشند. هر پروفایل فعال یک فضای شبکهٔ مستقل یا Network Namespace دارد.
+با SplitForge برای هر برنامه، اسکریپت یا سرویس ثبت‌شده یک مسیر اینترنت انتخاب
+می‌کنید؛ مثلاً ربات با WireGuard، اسکرپر با VLESS و بکاپ با اینترنت مستقیم سرور.
+برنامه‌هایی که ثبت نکرده‌اید روی شبکهٔ قبلی می‌مانند. برای هر پروفایل فعال یک
+network namespace ساخته می‌شود. تغییر مسیر، برنامهٔ مدیریت‌شده را متوقف و دوباره
+اجرا می‌کند؛ اتصال TCP و حافظهٔ پردازش قبلی حفظ نمی‌شوند.
 
-برنامه از داخل همان فضا اجرا می‌شود و فرزندانش نیز آن فضا را به ارث می‌برند.
-ثبت یک مسیر فایل به‌تنهایی فرایندهای ازقبل‌اجراشده را پیدا و منتقل نمی‌کند.
-این پروژه سرویس‌دهندهٔ VPN، فروشندهٔ کانفیگ، نصب‌کنندهٔ سرور DNSTT یا مدیر شبکهٔ
-کانتینرها نیست؛ باید اتصال و سرور سمت مقابل را از قبل داشته باشید.
+نسخهٔ فعلی رابط شش‌صفحه‌ای Textual، CLI، نصب‌کننده، نگهداری وضعیت خصوصی، مدیریت
+systemd، DNS رمزگذاری‌شده و اجرای برنامه با **root یا کاربر عادی** دارد.
+آداپتورهای VLESS/REALITY، VMess، Trojan، Shadowsocks، SOCKS5، WireGuard، OpenVPN،
+DNSTT و Slipstream پیاده شده‌اند. وجود آداپتور به معنی آزمایش با تمام سرویس‌دهنده‌ها
+نیست؛ [گزارش دقیق آزمون‌ها](VALIDATION.md) این تفاوت را مشخص می‌کند.
 
-## ۲. الان دقیقاً چه چیزی آماده است؟
+## پیش‌نیاز و نصب
 
-نسخهٔ موجود **بک‌اند مرحلهٔ اول** است و این کدها را دارد:
-
-- ذخیرهٔ پروفایل‌ها، برنامه‌ها و نگاشت کاربران در فایل state با نوشتن اتمیک و قفل.
-- خواندن URIها و فایل‌های پشتیبانی‌شده و ردکردن بخشی از تنظیمات نامعتبر/خطرناک.
-- ساخت namespace، رابط شبکه، مسیرهای محدود و قواعد nftables.
-- DNS محلی در namespace که درخواست‌ها را از طریق HTTPS معتبر ارسال می‌کند.
-- اجرای یک‌بارهٔ فرمان یا ساخت سرویس پایدار systemd با کاربر غیر root.
-- نسبت‌دادن سرویس واجد شرایط به پروفایل و تغییر تخصیص با توقف/اجرای مجدد.
-- بررسی IP خروجی، کد کشور، زمان درخواست HTTPS و شمارندهٔ ترافیک رابط تونل.
-
-این بخش‌ها **هنوز وجود ندارند**: رابط Textual، ماتریس تعاملی، فایل‌براوزر، نمایشگر
-لاگ داخل برنامه، فرمان عمومی `splitforge`، نصب‌کنندهٔ `install.sh` و بسته‌بندی
-`pyproject.toml`. بنابراین فعلاً دستورهایی مثل `splitforge exec` یا نصب با
-`pip install .` راه استفاده از این مخزن نیستند.
-
-نتیجهٔ ثبت‌شدهٔ تست روی ویندوز: **۹ تست موفق و ۱ تست مخصوص POSIX ردشده از اجرا**.
-تست‌های شبکه فرمان‌های تولیدشده را با mock بررسی می‌کنند؛ اتصال واقعی VPN و
-رفتار کرنل/systemd، قطع تونل، راه‌اندازی مجدد و ایمنی SSH هنوز روی لینوکس تأیید
-نشده‌اند. عدد نسخه در سورس هم به معنی انتشار نسخهٔ پایدار یا تأیید تولید نیست.
-
-## ۳. پیش‌نیازها و سطح دسترسی
-
-| مورد | توضیح |
-| --- | --- |
-| میزبان | لینوکس با systemd به‌عنوان PID 1؛ ماشین مجازی یا VPS آزمایشی |
-| پایتون | مبنای پیشنهادی 3.10 یا جدیدتر |
-| دسترسی مدیریتی | برای ساخت namespace، قواعد فایروال و سرویس سیستم |
-| کاربر برنامه | کاربر موجودِ غیر root؛ Runner اجرای UID صفر را رد می‌کند |
-| قابلیت کرنل | namespace و TUN؛ برای WireGuard پشتیبانی کرنل هم لازم است |
-| اتصال سمت مقابل | کانفیگ واقعی، سرور فعال و اطلاعات احراز هویت معتبر |
-| ابزار پروتکل | ابزارهای سیستم و باینری‌های لازم برای آداپتور انتخابی |
-
-Ubuntu 22.04/24.04 و Debian 12 هدف‌های معقول برای آزمایش‌اند؛ فهرست توزیع‌های
-تأییدشده نیستند. صرف وجود پایتون روی ویندوز، macOS، WSL یا یک کانتینر محدود برای
-اجرای بخش شبکه کافی نیست. برای آزمایش سرور، کنسول بازیابی ارائه‌دهنده را در دسترس
-داشته باشید؛ این مستند ادعای «قطع‌نشدن قطعی SSH» نمی‌کند.
-
-## ۴. شروع بدون تغییر شبکه
-
-برای دیدن سورس و اجرای تست‌های غیرمدیریتی:
-
-```sh
-git clone https://github.com/EclipseOfficialDota/SplitForge.git
-cd SplitForge
-python3 -m unittest discover -s tests -v
-```
-
-بک‌اند فعلی فقط از کتابخانهٔ استاندارد پایتون استفاده می‌کند. اجرای این تست‌ها به
-کانفیگ VPN یا root نیاز ندارد. روی ویندوز تست دوام state اجرا نمی‌شود و خودِ
-Runner نیز به ماژول لینوکسی `pwd` وابسته است.
-
-## ۵. آماده‌سازی دستی محیط آزمایشی لینوکس
-
-این روش موقتِ توسعه است تا زمان انتشار نصب‌کننده. دستورهای کامل و قابل پیگیری در
-[آموزش عملی](GETTING_STARTED.md#manual-linux-lab-setup) آمده‌اند. ترتیب کار:
-
-1. ابزارهای سیستم را با مدیر بستهٔ توزیع نصب کنید.
-2. سورس را در مسیر ثابت و متعلق به root قرار دهید.
-3. یک venv ثابت بسازید و پوشهٔ پکیج را در site-packages آن کپی کنید.
-4. import را بیرون از پوشهٔ سورس بررسی کنید.
-5. کاربر غیر root و مسیر مناسب برای اسکریپت بسازید.
-6. فایل کانفیگ واقعی را بیرون از Git و با دسترسی محدود نگه دارید.
-
-ابزارهای پایه و آداپتورهای WireGuard/OpenVPN:
+Ubuntu/Debian با Python 3.10 یا جدیدتر، systemd به‌عنوان PID 1، دسترسی root،
+`/dev/net/tun` و امکان ساخت namespace لازم است. ویندوز و macOS به‌صورت بومی
+موتور شبکه را اجرا نمی‌کنند. تست واقعی این پروژه روی Ubuntu 24.04 داخل WSL2 با
+systemd انجام شده است. کانتینر یا VPS محدود ممکن است حتی با root اجازهٔ TUN ندهد.
+Ubuntu 22.04/24.04 و Debian 12/13 هدف نصب هستند؛ آزمایش همهٔ آن‌ها ادعا نشده است.
 
 ```sh
 sudo apt-get update
-sudo apt-get install --no-install-recommends \
-  python3 python3-venv git ca-certificates curl \
-  iproute2 nftables procps wireguard-tools openvpn
+sudo apt-get install -y git
+git clone https://github.com/EclipseOfficialDota/SplitForge.git
+cd SplitForge
+sudo bash install.sh
+sudo splitforge doctor
 ```
 
-برای پروفایل‌های پروکسی، `xray` و `tun2socks` هم لازم‌اند. DNSTT به
-`dnstt-client` و Slipstream به `slipstream-client` نیاز دارد. آن‌ها را از پروژه‌های
-اصلیِ لینک‌شده در [راهنمای پروتکل](PROTOCOLS.md) تهیه کنید، معماری پردازنده و
-اطلاعات صحت انتشار را بررسی کنید و در مسیر سیستمی متعلق به root قرار دهید.
-این مخزن فعلاً آن‌ها را خودکار نصب یا نسخهٔ آن‌ها را pin نمی‌کند.
-
-برای نصب دستیِ تازه، مسیرهای زیر نباید از قبل دارای نصب دیگری باشند:
+نصب‌کننده ابزارهای سیستم، محیط مستقل `/opt/splitforge/venv`، وابستگی‌های پایتون
+با نسخه‌های محدودشده در `requirements.lock` و Xray/tun2socks با بررسی SHA-256 نصب
+می‌کند. فرمان `/usr/local/bin/splitforge` به محیط نصب متصل می‌شود. کد و مسیر نصب
+باید در اختیار مدیر سرور باشند. کلید VPN یا سرور رایگان همراه پروژه نیست.
 
 ```sh
-sudo install -d -m 0755 /opt/splitforge
-sudo git clone https://github.com/EclipseOfficialDota/SplitForge.git /opt/splitforge/source
-sudo python3 -m venv /opt/splitforge/venv
-
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-import shutil
-import sysconfig
-from pathlib import Path
-
-source = Path('/opt/splitforge/source/splitforge')
-target = Path(sysconfig.get_paths()['purelib']) / 'splitforge'
-if target.exists():
-    raise SystemExit('Existing installation: follow the update guide.')
-shutil.copytree(source, target)
-print(target)
-PY
-
-cd /tmp
-sudo /opt/splitforge/venv/bin/python -c \
-  'import splitforge; print(splitforge.__file__)'
+sudo splitforge
+splitforge --demo
+splitforge --help
 ```
 
-خروجی import باید داخل venv باشد. این نکته مهم است: systemd از همان مسیر مطلق
-مفسر استفاده می‌کند و ممکن است پوشهٔ کاریِ ترمینال شما را نداشته باشد. صرف اجرای
-پایتون از داخل مخزن، نصب پایدارِ helperها محسوب نمی‌شود.
+حالت demo بدون root و بدون تغییر شبکه/ذخیرهٔ وضعیت است؛ آدرس‌ها و اعدادش نمونه‌اند.
+برای نصب بدون دریافت هسته‌های پروکسی از `--skip-proxy-cores` استفاده کنید؛ پیش از
+اجرای پروفایل پروکسی باید خودتان آن‌ها را نصب کنید. مسیر نصب با `--prefix` قابل
+تغییر است. رنج `10.203.0.0/18` و جدول‌ها/اولویت‌های اختصاصی را با شبکهٔ موجود
+سرور تداخل ندهید؛ جزئیات در [معماری](ARCHITECTURE.md).
 
-نمونهٔ ساخت کاربر و مسیرهای آزمایشی:
+## کار با رابط ترمینال
 
-```sh
-sudo useradd --system --create-home \
-  --home-dir /var/lib/splitforge-demo \
-  --shell /usr/sbin/nologin splitforge-demo
-sudo install -d -m 0755 /srv/splitforge-demo
-sudo install -d -m 0700 /root/splitforge-profiles
-```
-
-اگر کاربر وجود دارد، ابتدا وضعیتش را بررسی کنید. کانفیگ واقعی WireGuard را به
-`/root/splitforge-profiles/client.conf` منتقل و دسترسی فایل را `0600` کنید.
-اسکریپت برنامه باید برای کاربر برنامه خواندنی و پوشه‌هایش قابل عبور باشند؛ مسیر
-`/root/bot.py` معمولاً برای کاربر غیر root مناسب نیست.
-
-## ۶. ساخت و آزمایش اولین پروفایل
-
-فایل WireGuard باید IPv4 در `Address` و یک peer با `AllowedIPs = 0.0.0.0/0`
-داشته باشد. hookهایی مثل `PostUp` پذیرفته نمی‌شوند. `DNS` داخل فایل هم جایگزین
-می‌شود. نمونهٔ اجرای API با دسترسی مدیریتی:
-
-```sh
-sudo /opt/splitforge/venv/bin/python - <<'PY'
-from splitforge.state import StateStore
-from splitforge.protocols.manager import ProtocolManager
-
-store = StateStore()
-manager = ProtocolManager(store)
-existing = [p for p in store.profiles() if p.name == 'wg-lab']
-profile = existing[0] if existing else manager.import_profile(
-    '/root/splitforge-profiles/client.conf', name='wg-lab'
-)
-print('ID:', profile.id)
-print('Missing:', manager.missing(profile.protocol))
-manager.start(profile.id)
-print(manager.test(profile.id))
-PY
-```
-
-نام پروفایل باید یکتا باشد. import مجدد با نام یکسان، ویرایش پروفایل قبلی نیست.
-`start()` سرویس پروفایل را می‌سازد، اجرا و برای بوت فعال می‌کند. همچنین در شروع،
-بررسی واقعی DNS/HTTPS انجام می‌دهد؛ شکست این مرحله ممکن است کمی طول بکشد.
-
-خروجی تست شامل IP مشاهده‌شده، کد کشور و زمان درخواست است. این زمان، DNS، TLS،
-HTTP و تلاش‌های مجدد را در بر می‌گیرد؛ **پینگ ICMP نیست**. بررسی از مسیر
-`https://www.cloudflare.com/cdn-cgi/trace` انجام می‌شود و وابستگی به همان مقصد
-دارد. فیلد `active` در `status()` وضعیت سرویس systemd است و به‌تنهایی سلامت
-لحظه‌ای اتصال را ثابت نمی‌کند.
-
-## ۷. اجرای یک فرمان یا اسکریپت
-
-پس از آماده‌سازی محیط، نمونه‌های API با این اشیا کار می‌کنند:
-
-```python
-from splitforge.state import StateStore
-from splitforge.protocols.manager import ProtocolManager
-from splitforge.core.runner import Runner
-
-store = StateStore()
-manager = ProtocolManager(store)
-runner = Runner(store, manager)
-```
-
-در همین زمینهٔ پایتون مدیریتی، برای یک اسکریپت واقعی:
-
-```python
-exit_code = runner.execute(
-    ['/usr/bin/python3', '/srv/my-app/bot.py'],
-    profile_name='wg-lab', user='my-app-user', cwd='/srv/my-app'
-)
-print(exit_code)
-```
-
-نام کاربر و مسیرها را با موارد موجود عوض کنید. برای فایل شل:
-
-```python
-runner.execute(
-    ['/bin/sh', '/srv/my-app/job.sh'],
-    profile_name='wg-lab', user='my-app-user', cwd='/srv/my-app'
-)
-```
-
-این اجرا یک سرویس موقت systemd است و رکورد برنامهٔ دائمی نمی‌سازد. shell خودکار
-بین آرگومان‌ها قرار نمی‌گیرد. اگر نام پروفایل در `execute()` داده نشود، نگاشت ذخیره‌شدهٔ
-کاربر بررسی می‌شود؛ اگر نگاشتی نباشد، اجرا Direct است. در این نسخه گزینهٔ جداگانهٔ
-«Direct با نادیده‌گرفتن نگاشت موجود کاربر» برای اجرای یک‌باره وجود ندارد.
-
-## ۸. اجرای دائمی و تعویض تونل
-
-برای اسکریپت موجود و خواندنی با کاربر برنامه:
-
-```python
-from splitforge.state import AppBinding
-
-app = AppBinding(
-    name='my-bot', argv=['/usr/bin/python3', '/srv/my-app/bot.py'],
-    user='my-app-user', cwd='/srv/my-app',
-)
-store.save_app(app)
-app = runner.bind(app.id, 'wg-lab')
-print(app.id, runner.unit(app))
-```
-
-ذخیرهٔ `AppBinding` به‌تنهایی برنامه را اجرا نمی‌کند؛ `bind()` سرویس را می‌سازد و
-به‌صورت پیش‌فرض اجرا/فعال می‌کند. برای ثبت تخصیص و باقی‌گذاشتن برنامه در حالت متوقف:
-
-```python
-runner.bind(app.id, 'wg-lab', start=False)
-```
-
-اگر پروفایل واقعی دوم را قبلاً با نام `vless-lab` وارد کرده‌اید:
-
-```python
-runner.bind(app.id, 'vless-lab')
-```
-
-ابتدا پروفایل مقصد آماده می‌شود، سپس برنامهٔ قبلی متوقف و با namespace جدید
-اجرا می‌شود. **اتصال‌های باز و حافظهٔ فرایند حفظ نمی‌شوند.** اگر مرحله‌ای شکست
-بخورد، بازگردانی تنظیمات و وضعیت قبلی تلاش می‌شود؛ خودِ rollback هم ممکن است
-شکست بخورد و باید لاگ و وضعیت واقعی سرویس را بررسی کنید.
-
-بازگشت برنامهٔ ثبت‌شده به اینترنت مستقیم:
-
-```python
-runner.bind(app.id, None)
-```
-
-در حالت Direct، محافظ namespace/DNS مربوط به SplitForge اعمال نمی‌شود. برای
-سرویسِ ازقبل‌موجود، drop-in متعلق به SplitForge حذف می‌شود و تنظیم اصلی سرویس
-دوباره ملاک است؛ اگر آن سرویس خودش محدودیت شبکه دارد، آن محدودیت باقی می‌ماند.
-
-## ۹. سرویس موجود و نگاشت کاربر
-
-برای نمونه، اگر `my-worker.service` از قبل loaded و دارای `User=my-worker` است:
-
-```python
-service_app = AppBinding(
-    name='worker-service', service='my-worker.service', user='my-worker'
-)
-store.save_app(service_app)
-runner.bind(service_app.id, 'wg-lab')
-```
-
-سرویس root، سرویس socket-activated و واحدهای داخلی SplitForge از این راه پذیرفته
-نمی‌شوند. فایل اصلی سرویس جایگزین نمی‌شود؛ یک `90-splitforge.conf` در پوشهٔ drop-in
-اضافه می‌شود و تخصیص باعث restart سرویس خواهد شد.
-
-نگاشت کاربر قابلیت محدودتری دارد:
-
-```python
-unit = runner.bind_user('labuser', 'wg-lab')
-print(unit)
-```
-
-`labuser` باید کاربر واقعی با UID حداقل ۱۰۰۰ باشد؛ کاربر سیستمیِ نمونهٔ بالا
-واجد این شرط نیست. این API برای `user@UID.service` فایل می‌نویسد و systemd را
-reload می‌کند، ولی user manager را خودکار restart نمی‌کند. اعمال آن روی manager
-درحال‌اجرا به restart آگاهانهٔ همان واحد نیاز دارد و برنامه‌های زیرمجموعه‌اش را
-می‌تواند متوقف کند. فرایندها، نشست SSH و jobهای هم‌UID خارج از این manager خودکار
-منتقل نمی‌شوند. برای حذف نگاشت، `runner.bind_user('labuser', None)` را فراخوانی
-کنید و برای تغییر فضای manager درحال‌اجرا همان نکتهٔ restart را در نظر بگیرید.
-
-## ۱۰. تفاوت پروتکل‌ها و DNS
-
-| پروتکل | نکتهٔ مهم این نسخه |
+| بخش | کاربرد |
 | --- | --- |
-| VLESS / VMess / Trojan / Shadowsocks | Xray به‌همراه tun2socks؛ سازگاری UDP به سرور و تنظیمات وابسته است |
-| SOCKS5 | برای UDP باید سرویس سمت مقابل واقعاً UDP relay بدهد |
-| WireGuard | IPv4 و peer مسیر پیش‌فرض لازم است؛ hookهای wg-quick اجرا نمی‌شوند |
-| OpenVPN | TUN و مجموعهٔ محدود تنظیمات؛ plugin، include و اسکریپت دلخواه رد می‌شوند |
-| DNSTT | سرور، دامنه، کلید عمومی و SOCKS5 سمت مقابل لازم است؛ آداپتور TCP است |
-| Slipstream | SOCKS5 سمت مقابل، resolver IPv4 و گواهی PEM pin‌شده لازم است؛ TCP است |
+| Home | تعداد تونل و برنامه، پهنای‌باند مشترک، وضعیت سرویس و آخرین تست خروجی |
+| App Router | انتخاب برنامه و تغییر مسیر به Direct یا پروفایل |
+| VPN Profiles | افزودن، جایگزینی تنظیمات پروفایل خاموش، شروع، توقف، تست و حذف |
+| Add / Browse | مرور فایل، انتخاب فرمان از پردازش موجود یا انتخاب سرویس |
+| Security & DNS | محافظ namespace و تنظیم DNS-over-HTTPS هر پروفایل |
+| Logs & Tools | لاگ زندهٔ systemd و نصب وابستگی‌ها |
 
-DNSTT و Slipstream خودشان معادل SOCKS سرور نیستند. تنظیم DNS delegation و سرور
-مقابل خارج از این پروژه است. UDP عمومی برنامه روی این دو آداپتور رد می‌شود؛
-DNS محلی همچنان با UDP/TCP به stub می‌رسد و از آنجا با HTTPS/TCP در تونل می‌رود.
+کلیدهای ۱ تا ۶ صفحه را عوض می‌کنند؛ Tab و جهت‌ها و Enter برای پیمایش، A افزودن
+برنامه، N پروفایل جدید، C انتخاب مسیر، T تست پروفایل‌های فعال، R نوسازی و Q خروج.
+Escape پنجره را می‌بندد. کلیک ماوس نیز کار می‌کند. اندازهٔ ۱۲۰×۴۰ یا بزرگ‌تر بهتر
+است. بستن رابط سرویس‌ها را متوقف نمی‌کند. هنگام عملیات جاری صبر کنید تا تمام شود.
 
-resolver برنامه در namespace روی `127.0.0.53` قرار می‌گیرد. پیش‌فرض DoH، آدرس
-`https://cloudflare-dns.com/dns-query` با IP راه‌انداز `1.1.1.1` است. IP راه‌انداز
-باید برای نام URL گواهی معتبر داشته باشد. ذخیرهٔ تنظیمات DNS، helper درحال‌اجرا
-را خودکار reload نمی‌کند. DNS حاملِ خود DNSTT/Slipstream با DNS برنامه متفاوت است.
+وضعیت Active یعنی سرویس فعال است، نه اینکه همین لحظه خروجی VPN تأیید شده باشد.
+برای بررسی تازه Test Egress را بزنید. زمان نمایش‌داده‌شده شامل DNS و TLS و HTTPS
+و تلاش مجدد است؛ پینگ ICMP نیست. مصرف پهنای‌باند متعلق به کل رابط پروفایل است و
+با بازسازی آن صفر می‌شود؛ سهم دقیق هر برنامه محاسبه نمی‌شود.
 
-چون چند برنامه یک namespace پروفایل را شریک‌اند، خاموش‌کردن Kill Switch یا
-DNS isolation برای یک برنامهٔ تونل‌شده مستقل از بقیه در این نسخه مجاز نیست.
-Proxychains هم صرفاً wrapper راحتِ TCP است و ضمانت namespace را ندارد.
+## اولین پروفایل
 
-## ۱۱. لاگ، اطلاعات و عیب‌یابی
-
-نام واحد برنامه را از `runner.unit(app)` بگیرید و همان نام واقعی را استفاده کنید:
+فایل واقعی سرویس‌دهنده را در پوشهٔ خصوصی مانند `/root/profiles` نگه دارید؛ مجوز
+پوشه 0700 و فایل‌ها 0600 باشد. برای WireGuard فایل `.conf` باید Address از نوع
+IPv4 و peer با `AllowedIPs=0.0.0.0/0` داشته باشد. دستورات PostUp و مانند آن
+پذیرفته نمی‌شوند تا تنظیمات شبکهٔ میزبان اجرا نشوند.
 
 ```sh
-sudo systemctl status splitforge-app-APP_ID.service --no-pager
-sudo journalctl -u splitforge-app-APP_ID.service -b --no-pager -n 100
-sudo journalctl -u splitforge-profile-PROFILE_ID.service -b --no-pager -n 100
-sudo journalctl -u splitforge-core-PROFILE_ID.service -b --no-pager -n 100
-sudo journalctl -u splitforge-dns-PROFILE_ID.service -b --no-pager -n 100
+sudo splitforge profile import /root/profiles/client.conf --name wg-europe
+sudo splitforge profile start wg-europe
+sudo splitforge profile test wg-europe
+sudo splitforge status
 ```
 
-`APP_ID` و `PROFILE_ID` در این فرمان‌ها نمونه‌اند؛ شناسهٔ واقعی را جایگزین کنید.
-برای سرویس پذیرفته‌شده، نام واحد اصلی سرویس را بررسی کنید. واحدهای موقت ممکن
-است بعد از خروج collect شوند، اما رکورد journal باقی مانده باشد.
+وارد کردن فقط ذخیره می‌کند. شروع پروفایل سرویس را برای بوت فعال و DNS و HTTPS
+خروجی را بررسی می‌کند. اگر بررسی شکست بخورد، مسیر مستقیم جایگزین نمی‌شود.
+برای URI حاوی رمز، لینک را با ویرایشگر در فایل خصوصی ذخیره کنید تا وارد تاریخچهٔ
+شل و آرگومان پردازش نشود:
 
-خطاهای رایج:
-
-- **ماژول پیدا نمی‌شود:** پکیج باید برای مفسر ثابتِ استفاده‌شده توسط systemd هم
-  قابل import باشد؛ import از پوشهٔ سورس کافی نیست.
-- **فایل برنامه باز نمی‌شود:** کاربر برنامه باید به فایل، مفسر و پوشهٔ کاری دسترسی
-  داشته باشد؛ برنامه با root اجرا نمی‌شود.
-- **ابزار پیدا نمی‌شود:** alias یا PATH مخصوص shell ورود برای helper کافی نیست.
-- **تداخل subnet/rule:** مسیرهای میزبان یا کانتینر را بررسی کنید؛ مسیر نامرتبط را
-  برای رفع خطا پاک نکنید. انتخاب خودکار pool جایگزین فعلاً وجود ندارد.
-- **تست IP/DNS شکست می‌خورد:** لاگ DNS، core و tun را کنار هم ببینید؛ ساعت سیستم،
-  CA، bootstrap IP، upstream و دسترسی به مقصد تست را بررسی کنید.
-- **OpenVPN منتظر می‌ماند:** احراز هویت باید غیرتعاملی و فایل‌های بیرونی موجود باشند.
-- **DNSTT/Slipstream پورت باز دارند ولی کار نمی‌کنند:** سمت مقابل باید واقعاً SOCKS5
-  باشد؛ صرف یک TCP listener یا پورت SSH به‌تنهایی کافی نیست.
-- **IP/ترافیک قدیمی دیده می‌شود:** دادهٔ state آخرین اندازه‌گیری است؛ شمارنده‌ها هم
-  مجموع رابط پروفایل‌اند و با ایجاد دوبارهٔ رابط از نو آغاز می‌شوند.
-
-راهنمای [عیب‌یابی کامل](TROUBLESHOOTING.md) فرمان‌های تشخیصی مرحله‌به‌مرحله دارد.
-برای رفع خطا فایروال کل میزبان یا routing table اصلی را flush نکنید.
-
-## ۱۲. توقف، حذف و نگهداری
-
-در زمینهٔ API دارای `store`، `manager`، `runner` و `app`:
-
-```python
-runner.stop(app.id)       # توقف؛ نگه‌داشتن تخصیص
+```sh
+sudo splitforge profile import /root/profiles/private.uri --uri-file --name proxy-europe
+sudo splitforge profile import /root/profiles/client.ovpn --name ovpn-europe
+sudo splitforge profile import /root/profiles/outbound.json --name xray-europe
 ```
 
-برای حذف ثبت برنامه و واحد/drop-in متعلق به آن:
+فایل Xray فقط یک outbound می‌پذیرد؛ routing دلخواه و bypass وارد نمی‌شود. فایل
+OpenVPN با فهرست مجاز کنترل می‌شود و script/plugin/include رد می‌شود. فایل‌های
+کلید و گواهیِ ارجاع‌شده باید بعد از import هم موجود بمانند.
 
-```python
-runner.remove(app.id)
+## اجرای یک‌باره با root
+
+```sh
+sudo splitforge exec --profile wg-europe --user root --cwd /root -- /usr/bin/python3 /root/bot.py
+sudo splitforge exec --profile wg-europe --user root -- /bin/bash /root/backup.sh
+sudo splitforge exec --profile direct --user root -- /usr/bin/id
 ```
 
-پس از حذف یا تغییر همهٔ ارجاع‌های برنامه/کاربر به پروفایل:
+فرمان بعد از `--` قرار می‌گیرد؛ آرگومان‌ها مستقیماً ارسال می‌شوند و شل ضمنی ندارند.
+برای پروژهٔ دارای venv، مسیر پایتون همان پروژه را بدهید. CLI به‌طور پیش‌فرض root
+است؛ API پایتون پیش‌فرض `nobody` دارد. `exec` تا پایان فرمان منتظر می‌ماند و کد
+خروج را برمی‌گرداند. root پشتیبانی می‌شود ولی capabilityها حذف می‌شوند؛ این مسیر
+برای اسکریپت‌های مورد اعتماد است، نه اجرای کد مخرب در یک sandbox کامل.
 
-```python
-profile = store.profile('wg-lab')
-manager.stop(profile.id)
+## اجرای دائمی و تغییر مسیر
+
+```sh
+sudo splitforge app add telegram-bot --user root --cwd /root/bot -- /root/bot/venv/bin/python /root/bot/main.py
+sudo splitforge bind telegram-bot --profile wg-europe
+sudo splitforge bind telegram-bot --profile proxy-europe
+sudo splitforge bind telegram-bot --profile direct
+sudo splitforge app stop telegram-bot
 ```
 
-توقف پروفایل می‌تواند برنامه‌های وابسته را هم متوقف کند. فیلد `enabled` در state
-وضعیت زندهٔ فرایند نیست. با روشن‌کردن دوبارهٔ پروفایل، همهٔ برنامه‌های قبلاً متوقف‌شده
-خودکار زنده نمی‌شوند؛ آن‌ها را صریحاً restart یا دوباره bind کنید.
+ثبت برنامه به‌تنهایی آن را اجرا نمی‌کند. bind سرویس تولیدشده را شروع و برای بوت
+فعال می‌کند؛ خرابی پردازش باعث تلاش برای اجرای مجدد می‌شود. `bind --stopped`
+مسیر را ذخیره می‌کند ولی اجرا نمی‌کند. تعویض مسیر اتصال‌های جاری را قطع می‌کند؛
+در شکست شروع، بازگرداندن واحد و نگاشت قبلی تلاش می‌شود، نه بازگرداندن دادهٔ برنامه.
 
-برای حذف دائمی، ابتدا teardown را انجام دهید، سپس واحد متوقف‌شدهٔ همان پروفایل
-را بردارید و در آخر state بدون ارجاعش را حذف کنید. نمونهٔ دقیق و محدود به همان
-شناسه در [بخش پاک‌سازی](GETTING_STARTED.md#inspection-stop-and-cleanup) آمده است.
-پاک‌کردن JSON به‌تنهایی شبکهٔ فعال را جمع نمی‌کند؛ helperها نیز برای جمع‌کردن منابع
-به state نیاز دارند.
+انتخاب پردازش موجود در رابط فقط فرمانش را کپی می‌کند؛ آن پردازش جابه‌جا نمی‌شود.
+اگر اجرای دو نمونه مشکل‌ساز است، نمونهٔ اصلی را خودتان متوقف کنید. هنگام انتخاب
+فایل، کاربر، پوشهٔ کاری، interpreter و مجوز اجرا را بررسی کنید.
 
-در نصب دستی، پکیج داخل venv کپی شده است؛ `git pull` روی checkout به‌تنهایی آن را
-به‌روز نمی‌کند. قبل از تعویض نسخه، برنامه‌ها و پروفایل‌های مربوط را متوقف کنید،
-state و credentialهای بیرونی را با دسترسی محدود پشتیبان بگیرید و مسیر مفسر مورد
-استفادهٔ سرویس‌ها را حفظ کنید. راهنمای [به‌روزرسانی](GETTING_STARTED.md#updating-the-manual-installation)
-جزئیات ترتیب کار و لزوم آزمایش reboot را توضیح می‌دهد.
+## سرویس systemd و نگاشت کاربر
 
-## ۱۳. اطلاعات حساس و مشارکت
+```sh
+sudo splitforge app add my-worker --user root --service my-worker.service
+sudo splitforge bind my-worker --profile wg-europe
+sudo splitforge user bind worker wg-europe
+sudo splitforge user bind worker direct
+```
 
-state پیش‌فرض در `/etc/splitforge/state.json` است و می‌تواند کلید خصوصی، رمز و
-کانفیگ کامل را داشته باشد. مجوز فایل محدود است، اما داده **در حالت ذخیره رمزگذاری
-نشده** است. نسخهٔ پشتیبان هم حساس محسوب می‌شود. فایل state، کانفیگ واقعی و URI
-اشتراک را در Issue یا Git قرار ندهید. جزئیات در [SECURITY.md](../SECURITY.md) است.
+کاربر ثبت‌شده باید با کاربر مؤثر سرویس برابر باشد. سرویس بدون User= یا با User=0
+نیز root محسوب می‌شود و پشتیبانی می‌شود. سرویس‌های SSH، شبکه، resolver، داخلی
+SplitForge و socket-activated پذیرفته نمی‌شوند. Drop-in اختصاصی
+`90-splitforge.conf` اضافه می‌شود؛ Direct آن را حذف و سرویس اصلی را ری‌استارت
+می‌کند. فعال‌سازی بوتِ سرویس اصلی در اختیار مدیر باقی می‌ماند.
 
-برای گزارش باگ، commit سورس، نسخهٔ توزیع/کرنل/پایتون/systemd و باینری پروتکل،
-فراخوانی API ناموفق و بخش پاک‌سازی‌شدهٔ خطا/لاگ را بنویسید. مشخص کنید تست واقعی
-اتصال انجام داده‌اید یا فقط تست واحد را اجرا کرده‌اید. برای گزارش امنیتی، وجود
-گزینهٔ گزارش خصوصی GitHub را بررسی کنید؛ کانال خصوصی یا SLA از قبل اعلام نشده است.
+نگاشت user فقط user-manager حساب عادی با UID حداقل 1000 را برای اجرای آینده
+تنظیم می‌کند؛ پس از ری‌استارت عمدی آن manager اعمال می‌شود و می‌تواند سرویس‌های
+کاربر را قطع کند. همهٔ پردازش‌های UID، SSH موجود، cron و root را یکجا شکار نمی‌کند.
+برای root هر اسکریپت یا سرویس را جدا ثبت کنید.
 
-## ۱۴. ادامهٔ پروژه
+## DNS، Kill Switch و پروتکل‌ها
 
-مرحلهٔ دوم برای رابط Textual، داشبورد، ماتریس انتخاب تونل، انتخاب فایل/فرایند،
-تنظیمات محافظ و نمایش لاگ برنامه‌ریزی شده است. مرحلهٔ سوم برای CLI عمومی،
-نصب‌کننده و بسته‌بندی است. آزمایش واقعی پروتکل‌ها، شکست تونل، DNS، IPv6، rollback
-و reboot قبل از ادعای آمادگی تولید لازم است. زمان انتشار یا نتیجهٔ بنچمارک
-تأییدشده‌ای فعلاً اعلام نشده است.
+IPv6 در namespace غیرفعال است. Kill Switch و DNS Guard برای برنامه‌های دارای
+پروفایل اجباری‌اند، چون چند برنامه namespace مشترک دارند. با قطع هستهٔ تونل،
+دسترسی مستقیم به اینترنت میزبان جایگزین نمی‌شود. جدول اصلی routing میزبان تغییر
+نمی‌کند، ولی veth و جدول‌ها/قوانین اختصاصی ساخته می‌شوند. تغییرات بیرونیِ فایروال،
+کرنل یا سرویس‌دهنده همچنان می‌توانند شبکه را مختل کنند؛ تضمین مطلق قطعی‌ناپذیری SSH
+وجود ندارد.
 
-مجوز خود SplitForge، [MIT](../LICENSE) است. ابزارهای بیرونی مجوز و الزامات خودشان
-را دارند. راهنمای مشارکت در [CONTRIBUTING.md](../CONTRIBUTING.md) قرار دارد.
+```sh
+sudo splitforge profile stop wg-europe
+sudo splitforge profile dns wg-europe https://cloudflare-dns.com/dns-query 1.1.1.1
+sudo splitforge profile start wg-europe
+```
+
+آدرس bootstrap باید گواهی معتبر برای hostname تنظیم‌شده ارائه دهد. DNS برنامه
+از stub محلی به HTTPS داخل تونل می‌رود. برای شبکهٔ خصوصی می‌توانید endpoint تست
+و CA معتبر مخصوص را با `profile probe` تنظیم کنید؛ نمونه در آموزش انگلیسی است.
+TLS را برای رفع خطا خاموش نکنید. سرویس پیش‌فرض DNS و تست Cloudflare است و IP
+خروجی تونل را می‌بیند.
+
+DNSTT و Slipstream به دامنهٔ delegated و سرور سازگار نیاز دارند. مقصد سمت سرور
+باید SOCKS5 باشد؛ آداپتور فعلی آن‌ها TCP است و UDP عمومی ارائه نمی‌کند.
+Slipstream گواهی PEM پین‌شده و DNSTT کلید عمومی ۳۲ بایتی hex می‌خواهد.
+روش راه‌اندازی در [راهنمای پروتکل‌ها](PROTOCOLS.md) آمده است.
+
+```sh
+sudo splitforge dependencies install dnstt-client
+sudo splitforge profile dns-tunnel dns-main dnstt t.example.com udp://1.1.1.1:53 --public-key-file /root/server.pub
+sudo splitforge dependencies install slipstream-client
+sudo splitforge profile dns-tunnel dns-backup slipstream t.example.com 1.1.1.1:53 --certificate /root/server.pem
+```
+
+نمونه‌ها به سرور و دامنهٔ واقعی خودتان نیاز دارند. ساخت DNSTT از سورس پین‌شده است
+و دسترسی به رجیستری Go لازم دارد؛ فیلترینگ دانلود می‌تواند نصب را متوقف کند.
+
+## ویرایش، ارتقا، توقف و بازیابی
+
+```sh
+sudo splitforge profile stop wg-europe
+sudo splitforge profile import /root/profiles/new.conf --replace wg-europe
+sudo splitforge profile start wg-europe
+sudo splitforge bind telegram-bot --profile wg-europe
+```
+
+جایگزینی شناسه، اتصال برنامه‌ها، DNS و تنظیم تست را حفظ و اندازه‌گیری قبلی را پاک
+می‌کند. شروع مجدد پروفایل به‌تنهایی همهٔ برنامه‌های متوقف‌شده را راه نمی‌اندازد؛
+bind یا restore را آگاهانه اجرا کنید. برای ارتقا ابتدا از state، کلیدهای اصلی،
+واحدهای systemd و دادهٔ برنامه بکاپ خصوصی بگیرید:
+
+```sh
+git pull --ff-only
+sudo bash install.sh --upgrade --restore
+sudo splitforge status
+sudo splitforge logs --follow
+```
+
+ارتقا workloadها را متوقف، intent فعال‌بودن را حفظ و بسته را نصب می‌کند؛ restore
+دوباره همان intent را اعمال می‌کند. بدون آن می‌توانید بعداً `sudo splitforge restore`
+بزنید. شکست نصب ممکن است برنامه‌ها را متوقف باقی بگذارد؛ نسخهٔ قبلی را دوباره نصب
+و بازیابی کنید. rollback تراکنشیِ بسته یا دادهٔ برنامه پیاده نشده است. رفتار ریبوت
+و upstream را روی سرور خودتان تمرین کنید.
+
+```sh
+sudo splitforge app remove telegram-bot
+sudo splitforge profile stop wg-europe
+sudo splitforge profile remove wg-europe
+sudo splitforge stop-all
+```
+
+قبل از حذف پروفایل، ارجاع برنامه‌ها و کاربرانش را بردارید. حذف ثبت سرویس موجود
+خودِ unit اصلی یا داده‌ها را حذف نمی‌کند ولی آن را متوقف می‌کند. برای uninstall
+اول نگاشت کاربران، برنامه‌ها و پروفایل‌ها را حذف کنید؛ سپس symlink فرمان و پوشهٔ
+نصب را بردارید. ابزارهای مشترک سیستم را بدون بررسی حذف نکنید. stop-all وضعیت را
+نگه می‌دارد؛ گزینهٔ `--preserve` intent بوت را هم برای restore حفظ می‌کند.
+
+## امنیت، آزمون و گزارش مشکل
+
+state شامل رمز و کلید است؛ در GitHub، اسکرین‌شات یا لاگ عمومی منتشرش نکنید.
+namespace جداسازی شبکه است، نه جداسازی کامل فایل و کد مخرب. روی حساب root فقط
+برنامهٔ مورد اعتماد اجرا کنید. [مدل امنیت](../SECURITY.md) را بخوانید.
+
+آزمون‌ها شامل اجرای واقعی namespace، SOCKS5، WireGuard، DoH با TLS معتبر،
+root، تعویض برنامه و جلوگیری از fallback هستند. تست کنترل‌شدهٔ محلی جای آزمایش
+همهٔ VPNهای عمومی، توزیع‌ها و ریبوت را نمی‌گیرد. فرمان بازتولید و جزئیات در
+[VALIDATION.md](VALIDATION.md) است. برای گزارش، نسخهٔ سیستم و هسته‌ها، خطای دقیق
+و لاگ پاک‌سازی‌شده از اطلاعات حساس را در
+[Issues](https://github.com/EclipseOfficialDota/SplitForge/issues) بفرستید.

@@ -5,6 +5,7 @@ import argparse
 import http.client
 import ipaddress
 import json
+import logging
 import os
 import socket
 import socketserver
@@ -43,8 +44,7 @@ def unit_word(value: str) -> str:
 def namespace_properties(profile: Profile) -> list[str]:
     base = f"/etc/netns/{profile.namespace}"
     return [f"NetworkNamespacePath=/run/netns/{profile.namespace}",
-            f"BindReadOnlyPaths={base}/resolv.conf:/etc/resolv.conf",
-            f"BindReadOnlyPaths={base}/nsswitch.conf:/etc/nsswitch.conf",
+            f"BindReadOnlyPaths={base}/resolv.conf:/etc/resolv.conf {base}/nsswitch.conf:/etc/nsswitch.conf",
             "InaccessiblePaths=-/run/nscd -/run/systemd/resolve/io.systemd.Resolve"]
 
 
@@ -56,7 +56,7 @@ def atomic_secret(path: Path, content: str, mode: int = 0o600):
     fd, temporary = tempfile.mkstemp(dir=path.parent)
     try:
         os.fchmod(fd, mode)
-        with os.fdopen(fd, "w") as stream:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
@@ -198,7 +198,7 @@ class NetNS:
         return {key: stats.get(key, {}).get("bytes", 0) for key in ("rx", "tx")}
 
 
-def dns_stub(url: str, bootstrap: str):
+def dns_stub(url: str, bootstrap: str, ca_file: str = ""):
     """Bounded UDP/TCP DNS → certificate-verified DoH, inside the VPN namespace."""
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.fragment:
@@ -214,7 +214,7 @@ def dns_stub(url: str, bootstrap: str):
             raw = None
             try:
                 raw = socket.create_connection((bootstrap, parsed.port or 443), timeout=8)
-                connection.sock = ssl.create_default_context().wrap_socket(raw, server_hostname=parsed.hostname)
+                connection.sock = ssl.create_default_context(cafile=ca_file or None).wrap_socket(raw, server_hostname=parsed.hostname)
                 connection.request("POST", parsed.path or "/dns-query", body=query,
                                    headers={"Content-Type": "application/dns-message", "Accept": "application/dns-message"})
                 response = connection.getresponse()
@@ -222,7 +222,8 @@ def dns_stub(url: str, bootstrap: str):
                 if response.status != 200 or not 12 <= len(data) <= 4096:
                     raise ValueError("Invalid DoH response")
                 return query[:2] + data[2:]
-            except (OSError, ValueError, http.client.HTTPException):
+            except (OSError, ValueError, http.client.HTTPException) as error:
+                logging.getLogger("splitforge.dns").warning("DoH upstream request failed (%s)", type(error).__name__)
                 return query[:2] + bytes((0x81, 0x82)) + b"\x00" * 8
             finally:
                 connection.close()
@@ -315,9 +316,10 @@ if __name__ == "__main__":
     parser.add_argument("action", choices=["dns", "openvpn-up"])
     parser.add_argument("first")
     parser.add_argument("second")
+    parser.add_argument("--ca-file", default="")
     args = parser.parse_args()
     require_root()
     if args.action == "dns":
-        dns_stub(args.first, args.second)
+        dns_stub(args.first, args.second, args.ca_file)
     else:
         openvpn_up(args.first, args.second)

@@ -2,23 +2,24 @@
 
 [Home](README.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](SECURITY.md)
 
-The project currently contains the Part 1 backend. Documentation fixes, parser
-corrections, focused reliability work and real Linux integration evidence are
-useful contributions. Keep current functionality distinct from planned UI/CLI
-work; do not add release, benchmark or safety claims without corresponding data.
+The project ships a networking engine, Textual UI, Typer CLI and installer.
+Focused reliability work, protocol interoperability evidence and documentation
+are welcome. Do not add benchmark or safety claims without corresponding data.
 
 ## Local workflow
 
 ```sh
 git clone https://github.com/EclipseOfficialDota/SplitForge.git
 cd SplitForge
-python3 -m unittest discover -s tests -v
+python3 -m venv .venv
+.venv/bin/pip install -c requirements.lock -e .
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-The current non-privileged checks use stdlib unittest. Network-command tests use
-mocks and the state persistence test is POSIX-only. Importing `Runner` requires
-Linux's `pwd` module; do not make actual root/network changes as a side effect of
-test discovery or module import.
+The routine suite uses stdlib unittest and installed runtime dependencies.
+State persistence is POSIX-only; root integration is opt-in. CLI, UI, validation
+and rollback tests complement real kernel tests. Do not change root/network
+state as a side effect of test discovery or module import.
 
 Use a small focused change and include the reason, observed behavior and relevant
 verification in your pull request. Preserve literal argument handling, validation,
@@ -39,18 +40,19 @@ Use a disposable VM/VPS and report:
 
 Sanitize outputs and never attach real private keys, passwords, subscription URIs
 or a full state file. See [SECURITY.md](SECURITY.md) before reporting a vulnerability.
-There is no current automated integration pipeline; describe exactly what you
-ran rather than implying that a unit-test result covers kernel behavior.
+CI runs routine checks, builds packages and runs an isolated root Linux suite.
+See [Validation](docs/VALIDATION.md) for commands and recorded scope. Describe
+exactly what you ran rather than equating mocks with kernel behavior.
 
 ## Documentation changes
 
 Check local relative links and heading anchors. Use fenced `sh`/`python` blocks,
 explicit Linux paths and real existing API names. Mark sample server domains and
-credentials as values to replace. Never present planned `splitforge` CLI commands,
-a nonexistent installer or a conceptual UI drawing as already working.
+credentials as values to replace. Keep examples aligned with actual CLI help.
+Demo screenshots must be identified as synthetic data, not live provider results.
 
 Keep the Persian overview consistent with the English guide, especially for
-privileges, restart semantics, current limits and pending Linux validation.
+privileges, restart semantics, current limits and the Linux validation record.
 Documentation examples should parse, but syntax validation alone must not be
 described as a successful network test.
 

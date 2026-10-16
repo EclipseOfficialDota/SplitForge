@@ -2,10 +2,9 @@
 
 [Home](../README.md) · [Tutorial](GETTING_STARTED.md) · [Architecture](ARCHITECTURE.md)
 
-These are source-level APIs for Part 1, not a compatibility commitment for a
-published package. Network mutation requires Linux/root and working systemd.
+These are the current Python APIs; CLI users should start with the tutorial. Network mutation requires Linux/root and working systemd.
 Use the stable interpreter from the tutorial. All examples assume real profiles
-and existing non-root accounts where named.
+and existing Linux accounts where named. Root workloads are supported.
 
 ## Initialize the main objects
 
@@ -41,6 +40,8 @@ relocate the backend's other `/etc`, `/run`, or systemd resources.
 | `exit_ip` | Last stored exit address, initially empty |
 | `country` | Last stored two-letter country result, initially empty |
 | `latency_ms` | Last stored HTTPS/DNS elapsed time or `None` |
+| `probe_url` | Verified HTTPS trace endpoint; default Cloudflare `/cdn-cgi/trace` |
+| `tls_ca_file` | Optional absolute custom CA bundle path; also applies to DoH |
 
 Supported identifiers: `vless`, `vmess`, `trojan`, `shadowsocks`, `xray`,
 `wireguard`, `openvpn`, `dnstt`, `slipstream`, `socks5`.
@@ -59,7 +60,7 @@ dict manually. Names are labels; IDs determine resource names.
 | `argv` | Argument list, with an absolute executable; required unless `service` is set |
 | `id` | Random 8-character ID |
 | `profile_id` | `None` for Direct, otherwise a saved profile ID |
-| `user` | `nobody`; must exist and be non-root when launched |
+| `user` | `nobody`; must exist; root is supported (CLI/UI default to root) |
 | `cwd` | `/`; absolute working directory |
 | `service` | Existing `.service` name or `None` |
 | `kill_switch` | `True`; required true for a tunneled shared namespace |
@@ -96,9 +97,9 @@ deletion is not lifecycle teardown.
 ### imports and dependencies
 
 ```python
-manager.import_profile(source, name=None)
+manager.import_profile(source, name=None, replace_id=None)
 manager.dns_tunnel(
-    name, protocol, domain, resolver, public_key='', certificate=''
+    name, protocol, domain, resolver, public_key='', certificate='', replace_id=None
 )
 manager.dependencies(protocol)
 manager.missing(protocol)
@@ -108,6 +109,9 @@ manager.missing(protocol)
 keyword-only for `dns_tunnel`. Import accepts a supported URI or an existing
 `.conf`, `.ovpn`, `.json` path and returns a saved `Profile`. `dns_tunnel`
 constructs/saves DNSTT or Slipstream configuration; neither method starts it.
+Both support keyword-only `replace_id` for a stopped profile. Replacement
+retains ID/slot, assignments, DNS and probe settings, clearing old metrics.
+DNS-tunnel edits can preserve an existing key/certificate when omitted.
 See [Protocols](PROTOCOLS.md) for exact forms/restrictions.
 
 `dependencies()` returns executable names; `missing()` filters by executable
@@ -225,5 +229,5 @@ The command wrapper intentionally avoids echoing full secret-bearing arguments.
 
 Keep state while units still reference it. Stop/unbind workloads and user
 managers, stop profiles, remove specific persistent unit files, then delete
-unreferenced state if desired. The [tutorial cleanup](GETTING_STARTED.md#inspection-stop-and-cleanup)
+unreferenced state if desired. The [tutorial cleanup](GETTING_STARTED.md#logs-stop-and-remove)
 shows this order.

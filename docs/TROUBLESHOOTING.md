@@ -10,7 +10,7 @@ configuration, passwords or certificate private keys with a bug report.
 
 | Symptom / message | Likely layer | First action |
 | --- | --- | --- |
-| `splitforge: command not found` | Public CLI has not shipped | Use the documented Python API |
+| `splitforge: command not found` | Installation/PATH | Run install.sh; inspect /usr/local/bin/splitforge and its venv target |
 | `install.sh` / `pyproject.toml` missing | Later distribution part | Follow manual lab setup, not `pip install .` |
 | `No module named splitforge` in a service | Package unavailable to helper interpreter | Verify stable venv import from `/tmp` |
 | `No module named pwd` | Non-Linux runner import | Use Linux for networking/runner |
@@ -25,7 +25,7 @@ configuration, passwords or certificate private keys with a bug report.
 | Proxy listener unavailable/owned by another process | Core startup, CLI mismatch or port conflict | Check the expected core/transport journal |
 | Tunnel interface never ready | OpenVPN auth/handshake/hook/topology | Inspect profile and OpenVPN core journals |
 | Egress/DNS probe failed | Upstream, DNS, TLS or service environment | Inspect DNS/tun/core together |
-| Routed workloads must use non-root | App/service account | Create/select an appropriate non-root account |
+| Registered user must match service | App/service account | Match effective User=; absent User= or User=0 means root |
 | Socket-activated service rejected | Existing service activation path | Use a dedicated ordinary service |
 | Shared guard settings rejected | Per-app weakening in shared namespace | Keep both guard flags true for tunneled apps |
 | Assignment rollback failed | Old service could not be restored | Inspect service state; keep it stopped until repaired |
@@ -174,7 +174,7 @@ long-term app health are separate from profile health.
 Keep state and external credential files while recovering; helpers need them to
 identify the profile. Stop/recover affected workloads before changing networking.
 Use `Runner.stop`/`remove` and `ProtocolManager.stop` before manually deleting a
-specific owned unit. The [cleanup sequence](GETTING_STARTED.md#inspection-stop-and-cleanup)
+specific owned unit. The [cleanup sequence](GETTING_STARTED.md#logs-stop-and-remove)
 avoids leaving boot units pointing at missing state.
 
 If a namespace/resource remains, compare the actual ID, interface alias/name,
@@ -192,8 +192,10 @@ A route comparison does not independently prove SSH or DNS safety.
 Before claiming production readiness, deliberately test tunnel/core loss,
 packet drops, DNS failure, invalid config, rollback failure and reboot. Observe
 the managed application's actual traffic and verify that it never falls back
-to host egress while configured for an isolated profile. These experiments have
-not yet been recorded as passed for this project.
+to host egress while configured for an isolated profile. Local namespace,
+core-loss, DNS, WireGuard and root reassignment results are recorded in
+[Validation](VALIDATION.md). Public-provider, reboot and failure combinations
+beyond that record remain deployment-specific checks.
 
 ## Useful bug reports
 

@@ -1,0 +1,39 @@
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from typer.testing import CliRunner
+from splitforge.cli import app
+
+
+class CLITests(unittest.TestCase):
+    def test_help_and_version_do_not_mutate_state(self):
+        runner = CliRunner()
+        result = runner.invoke(app, ["--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("profile", result.output)
+        result = runner.invoke(app, ["--version"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("2.0.0", result.output)
+
+    def test_empty_profile_list_is_valid_json_and_read_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "absent.json"
+            result = CliRunner().invoke(app, ["--state", str(state), "profile", "list", "--json"])
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(json.loads(result.output), [])
+            self.assertFalse(state.exists())
+
+    @unittest.skipUnless(os.name == "posix", "State writes use POSIX locks")
+    def test_register_root_command_preserves_command_arguments(self):
+        with tempfile.TemporaryDirectory() as directory, patch("splitforge.cli.require_root"):
+            state = Path(directory) / "state.json"
+            result = CliRunner().invoke(app, ["--state", str(state), "app", "add", "root-bot", "--user", "root",
+                "--cwd", "/root", "--", "/usr/bin/python3", "/root/bot.py", "--some-option", "literal value"])
+            self.assertEqual(result.exit_code, 0, f"{result.output}: {result.exception}")
+            record = next(iter(json.loads(state.read_text())["apps"].values()))
+            self.assertEqual(record["user"], "root")
+            self.assertEqual(record["argv"][-3:], ["/root/bot.py", "--some-option", "literal value"])

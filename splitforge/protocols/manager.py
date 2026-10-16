@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 import ipaddress
 import json
-import os
 import re
 import shlex
 import shutil
@@ -210,7 +210,21 @@ class ProtocolManager:
     def missing(self, protocol: str) -> list[str]:
         return [name for name in self.dependencies(protocol) if not shutil.which(name)]
 
-    def import_profile(self, source: str, *, name: str | None = None) -> Profile:
+    def _save_import(self, profile: Profile, replace_id: str | None = None) -> Profile:
+        with self.store.operation():
+            if replace_id:
+                previous = self.store.profile(replace_id)
+                state = run(["systemctl", "show", self._unit(previous), "--property=ActiveState", "--value"], check=False).stdout.strip()
+                if self.netns.exists(previous) or state not in {"", "inactive", "failed"}:
+                    raise ValueError("Stop the profile before replacing its configuration")
+                profile = dataclasses.replace(profile, id=previous.id, slot=previous.slot,
+                    doh_url=previous.doh_url, doh_ip=previous.doh_ip,
+                    probe_url=previous.probe_url, tls_ca_file=previous.tls_ca_file)
+            return self.store.save_profile(profile)
+
+    def import_profile(self, source: str, *, name: str | None = None, replace_id: str | None = None) -> Profile:
+        if replace_id and not name:
+            name = self.store.profile(replace_id).name
         if "://" in source and not source.lstrip().startswith("{"):
             profile = import_uri(source, name)
         else:
@@ -233,15 +247,19 @@ class ProtocolManager:
                 profile = Profile(name or path.stem, "xray", {"outbound": outbounds[0]})
             else:
                 raise ValueError("Expected .conf, .ovpn, .json or a supported URI")
-        return self.store.save_profile(profile)
+        return self._save_import(profile, replace_id)
 
     def dns_tunnel(self, name: str, protocol: str, domain: str, resolver: str,
-                   *, public_key: str = "", certificate: str = "") -> Profile:
+                   *, public_key: str = "", certificate: str = "", replace_id: str | None = None) -> Profile:
+        previous = self.store.profile(replace_id) if replace_id else None
+        certificate_text = ""
         if protocol not in {"dnstt", "slipstream"}:
             raise ValueError("Expected dnstt or slipstream")
         if len(domain) > 253 or not re.fullmatch(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}", domain):
             raise ValueError("Invalid tunnel domain")
         if protocol == "dnstt":
+            if not public_key and previous and previous.protocol == protocol:
+                public_key = previous.config["public_key"]
             if not re.fullmatch(r"[a-fA-F0-9]{64}", public_key):
                 raise ValueError("DNSTT needs a 32-byte hex public key")
             if not resolver.startswith(("https://", "tls://", "udp://")):
@@ -250,11 +268,15 @@ class ProtocolManager:
             host, port = resolver.rsplit(":", 1)
             ipaddress.IPv4Address(host)
             endpoint(host, int(port))
-            if not certificate or not Path(certificate).is_file():
+            if certificate and Path(certificate).is_file():
+                certificate_text = Path(certificate).read_text(encoding="utf-8")
+            elif not certificate and previous and previous.protocol == protocol:
+                certificate_text = previous.config["certificate"]
+            if not certificate_text:
                 raise ValueError("Slipstream requires a pinned server certificate PEM file")
         config = {"domain": domain, "resolver": resolver, "public_key": public_key,
-                  "certificate": Path(certificate).read_text() if certificate else ""}
-        return self.store.save_profile(Profile(name, protocol, config))
+                  "certificate": certificate_text}
+        return self._save_import(Profile(name, protocol, config), replace_id)
 
     def _unit(self, profile: Profile) -> str:
         return f"splitforge-profile-{profile.id}.service"
@@ -319,6 +341,7 @@ class ProtocolManager:
     def _up(self, profile: Profile):
         require_root()
         with self.store.operation():
+            profile = self.store.profile(profile.id)
             runtime = Path("/run/splitforge", profile.id)
             runtime.mkdir(parents=True, mode=0o700, exist_ok=True)
             self.netns.create(profile)
@@ -353,7 +376,8 @@ class ProtocolManager:
                 else:
                     self._proxy(profile, runtime)
                 self._service(profile, "dns", [sys.executable, "-m", "splitforge.core.netns", "dns",
-                                               profile.doh_url, profile.doh_ip], namespace=True)
+                                               profile.doh_url, profile.doh_ip,
+                                               *(["--ca-file", profile.tls_ca_file] if profile.tls_ca_file else [])], namespace=True)
                 self.test(profile.id)
             except BaseException:
                 self._down(profile)
@@ -405,8 +429,8 @@ class ProtocolManager:
         self.netns.command(profile, "ip", "tuntap", "add", "dev", profile.interface, "mode", "tun")
         self.netns.guard(profile, proxy=True, udp=udp)
         self.netns.activate(profile)
-        self._service(profile, "tun", ["tun2socks", "-device", f"tun://{profile.interface}", "-proxy",
-                                      f"socks5://{profile.gateway}:1080", "-loglevel", "warn"], namespace=True)
+        self._service(profile, "tun", ["tun2socks", "--device", f"tun://{profile.interface}", "--proxy",
+                                      f"socks5://{profile.gateway}:1080", "--loglevel", "warn"], namespace=True)
 
     def _down(self, profile: Profile):
         require_root()
@@ -424,9 +448,10 @@ class ProtocolManager:
             raise RuntimeError("Start the profile before testing")
         # End-to-end HTTPS also exercises the namespace DNS stub. No direct
         # host HTTP fallback, redirects, GeoIP request or inherited proxy env.
-        script = ("import json,urllib.request; "
-                  "o=urllib.request.build_opener(urllib.request.ProxyHandler({})); "
-                  "r=o.open('https://www.cloudflare.com/cdn-cgi/trace',timeout=8); "
+        script = ("import json,ssl,urllib.request; "
+                  f"c=ssl.create_default_context(cafile={profile.tls_ca_file or None!r}); "
+                  "o=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=c)); "
+                  f"r=o.open({profile.probe_url!r},timeout=8); "
                   "d=dict(l.split('=',1) for l in r.read(8192).decode().splitlines() if '=' in l); "
                   "print(json.dumps({'ip':d['ip'],'country':d.get('loc','')}))")
         deadline, start = time.monotonic() + 25, time.monotonic()
@@ -434,7 +459,7 @@ class ProtocolManager:
             properties = [f"--property={setting}" for setting in namespace_properties(profile)]
             result = run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec",
                           f"--unit=splitforge-probe-{uuid.uuid4().hex[:8]}", "--property=RuntimeMaxSec=10",
-                          *properties, "--", sys.executable, "-c", script], timeout=15, check=False)
+                          *properties, "--", sys.executable, "-c", script.replace("$", "$$")], timeout=15, check=False)
             if result.returncode == 0:
                 break
             if time.monotonic() >= deadline:

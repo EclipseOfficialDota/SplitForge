@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Iterator
+from urllib.parse import urlsplit
 
 ID = re.compile(r"^[0-9a-f]{8}$")
 PROTOCOLS = {"vless", "vmess", "trojan", "shadowsocks", "xray",
@@ -37,6 +38,8 @@ class Profile:
     exit_ip: str = ""
     country: str = ""
     latency_ms: float | None = None
+    probe_url: str = "https://www.cloudflare.com/cdn-cgi/trace"
+    tls_ca_file: str = ""
 
     def __post_init__(self):
         checked_id(self.id)
@@ -47,6 +50,14 @@ class Profile:
         if not 0 <= self.slot <= 4095:
             raise ValueError("Invalid subnet slot")
         ipaddress.IPv4Address(self.doh_ip)
+        dns = urlsplit(self.doh_url)
+        if dns.scheme != "https" or not dns.hostname or dns.username or dns.fragment or dns.query:
+            raise ValueError("DNS upstream must be an HTTPS URL without credentials, query or fragment")
+        probe = urlsplit(self.probe_url)
+        if probe.scheme != "https" or not probe.hostname or probe.username or probe.fragment:
+            raise ValueError("Egress probe must use HTTPS without credentials or fragment")
+        if self.tls_ca_file and (not PurePosixPath(self.tls_ca_file).is_absolute() or any(c in self.tls_ca_file for c in "\r\n\0")):
+            raise ValueError("Custom CA bundle must use an absolute path")
 
     @property
     def namespace(self) -> str:
@@ -136,7 +147,7 @@ class StateStore:
             raise RuntimeError("State file must not be a symbolic link")
         if not self.path.exists():
             return {"version": 1, "profiles": {}, "apps": {}, "users": {}}
-        data = json.loads(self.path.read_text())
+        data = json.loads(self.path.read_text(encoding="utf-8"))
         if data.get("version") != 1:
             raise ValueError("Unsupported state version; refusing to overwrite")
         for key, item in data["profiles"].items():
@@ -157,7 +168,7 @@ class StateStore:
         fd, name = tempfile.mkstemp(dir=self.path.parent, prefix=".state-")
         try:
             os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "w") as stream:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
                 json.dump(data, stream, indent=2, ensure_ascii=False)
                 stream.write("\n")
                 stream.flush()
