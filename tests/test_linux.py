@@ -136,6 +136,15 @@ class LinuxIntegrationTests(unittest.TestCase):
                         f"dh none\nifconfig-noexec\nroute-noexec\nscript-security 2\nup {hook}\ndisable-dco\nverb 3\n")
                     ovpn_log = (base / "ovpn-server.log").open("w+")
                     ovpn_server = subprocess.Popen(["openvpn", "--config", str(server_config)], stdout=ovpn_log, stderr=ovpn_log)
+                    deadline = time.monotonic() + 15
+                    while time.monotonic() < deadline:
+                        if ovpn_server.poll() is not None:
+                            self.fail("OpenVPN fixture exited before becoming ready")
+                        if "Initialization Sequence Completed" in (base / "ovpn-server.log").read_text():
+                            break
+                        time.sleep(0.1)
+                    else:
+                        self.fail("OpenVPN fixture did not become ready before client startup")
                     manager.netns.command(profile, "sysctl", "-qw", "net.ipv4.ip_forward=1")
                     for ingress, egress in ((ovpn_interface, profile.interface), (profile.interface, ovpn_interface)):
                         manager.netns.command(profile, "nft", "add", "rule", "inet", "splitforge", "forward", "iifname", ingress,
@@ -167,9 +176,14 @@ class LinuxIntegrationTests(unittest.TestCase):
                              "except OSError:\n pass\nelse:\n s.close(); raise SystemExit(77)\n")
                     self.assertEqual(runner.execute(["/usr/bin/python3", "-c", check], profile_name=profile.id, user="root", cwd="/"), 0)
             except Exception:
-                for role in ("profile", "core", "tun", "dns"):
-                    details = run(["journalctl", "--no-pager", "-n", "20", "-u", f"splitforge-{role}-{profile.id}.service"], check=False)
-                    print(details.stdout, file=sys.stderr)
+                for tested in (profile, wireguard, openvpn):
+                    if tested is None:
+                        continue
+                    for role in ("profile", "core", "tun", "dns"):
+                        details = run(["journalctl", "--no-pager", "-n", "30", "-u", f"splitforge-{role}-{tested.id}.service"], check=False)
+                        print(details.stdout, file=sys.stderr)
+                if (base / "ovpn-server.log").exists():
+                    print((base / "ovpn-server.log").read_text()[-12000:], file=sys.stderr)
                 raise
             finally:
                 try:
