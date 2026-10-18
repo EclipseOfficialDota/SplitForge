@@ -18,6 +18,16 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.4.0 setup checks include address/config injection rejection, separate
+domain/IP ACME flags and certificate lineages, first interactive launch, private
+saved settings, renewal scheduling, certificate failure rollback and failed public
+readiness. Opt-in real Linux tests start/enable/restart an actual generated unit
+and compare the host route table. A real isolated nginx process exercises the
+generated TLS proxy with a specifically trusted fixture certificate, token login,
+Secure cookies and rejected foreign Host/Origin headers. The fixture test does
+not claim that a public CA issued a real domain/IP certificate. Public issuance
+requires a reachable server and acceptance of the CA subscriber agreement.
+
 Version 2.3.0: **54 Python tests passed with root integration enabled** locally,
 including HTTP-driven profile management and a real root systemd workload
 lifecycle. HTTP tests exercise token/session/logout/expiry, origin/host/CSRF

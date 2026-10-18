@@ -81,20 +81,24 @@ protected against adoption.
 
 ## Web control panel
 
-Prefer a browser? Version 2.3 includes a macOS Terminal-style dashboard with
+Prefer a browser? SplitForge includes a macOS Terminal-style dashboard with
 application routing, tunnel profiles, DNS, a core checklist and live logs.
 
 ```sh
 sudo splitforge web
+# Configure SSL/domain/IP, ports and a permanent service:
+sudo splitforge web setup
 # Read-only preview:
 splitforge web --demo
 ```
 
 ![SplitForge web panel in read-only demo mode](docs/assets/web-overview.png)
 
-The real panel requires its private administrator token and listens on
-`127.0.0.1:8765`. Access a VPS through an SSH forward; see the
-[web setup guide](docs/WEB_PANEL.md) for sign-in, options and a persistent service.
+First interactive launch offers SSL, domain or IP and port selection before
+starting a permanent systemd service. HTTPS setup obtains a trusted Let's Encrypt
+certificate and schedules renewal. Choose local mode for SSH forwarding instead.
+Every mode requires the private administrator token; see the
+[web setup guide](docs/WEB_PANEL.md) for certificate prerequisites and sign-in.
 The backend runs on Linux; the browser UI works on macOS, Windows and Linux.
 
 ## The terminal experience

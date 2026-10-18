@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.0 — 2026-10-18
+
+- First interactive `splitforge web` launch opens a setup wizard before serving.
+  `splitforge web setup` offers permanent local access, public HTTP or automatic
+  trusted HTTPS for a domain or public IP, with selectable ports.
+- Isolated Certbot 5.4+ installation, webroot ACME validation, short-lived IP
+  certificates and twice-daily automatic renewal with nginx reload.
+- Public nginx Host/Origin checks and secure HTTPS cookies retain token/session
+  protection. Backend remains on loopback. Setup checks actual readiness and
+  restores prior owned files/services on certificate or startup failure.
+- Real Linux tests cover permanent service startup/restart, host-route
+  preservation and generated nginx TLS login/session/Host/Origin behavior.
+
 ## 2.3.0 — 2026-10-17
 
 - macOS Terminal-style browser dashboard with responsive layout, app routing,

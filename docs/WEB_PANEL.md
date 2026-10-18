@@ -11,9 +11,76 @@ macOS, Linux or Windows; a responsive layout supports narrow/mobile screens.
 
 ## Start on your VPS
 
+### Automatic first launch (2.4+)
+
+Run this in an interactive SSH terminal:
+
+```sh
+sudo splitforge web
+```
+
+Before serving the panel, the first-run wizard asks about public/local access,
+SSL/HTTPS, domain or IP, the address, optional email, certificate subscriber terms
+and the panel port. It starts/enables `splitforge-web.service`; closing SSH no
+longer stops the panel. Subsequent interactive `splitforge web` starts the saved
+service and prints its address. To change these choices:
+
+```sh
+sudo splitforge web setup
+```
+
+For unattended configuration, supply the choices explicitly:
+
+```sh
+sudo splitforge web setup --address panel.example.com --port 443 --email admin@example.com --agree-tos
+sudo splitforge web setup --address YOUR_PUBLIC_IP --port 9090 --agree-tos
+# Local HTTP, with access through an SSH tunnel:
+sudo splitforge web setup --local --port 9090
+# Explicitly select unencrypted public HTTP:
+sudo splitforge web setup --address YOUR_PUBLIC_IP --port 9090 --no-tls
+```
+
+Replace `YOUR_PUBLIC_IP` with the server's globally routable IP. Domains must
+resolve to this server. HTTPS issuance/renewal needs **inbound port 80** for
+HTTP-01 validation, even when the panel uses 443/9090. The chosen panel port
+must also be reachable. Active UFW receives the necessary TCP allow rules;
+cloud/provider firewalls and other firewall managers need your own rules.
+Setup adds its own nginx virtual host and does not change host routing.
+
+Certbot 5.4+ is installed into `/opt/splitforge-certbot`, separately from the app.
+IP certificates use `--ip-address` and the `shortlived` ACME profile, with no
+self-signed fallback. They last about six days; `splitforge-web-renew.timer`
+checks twice daily and reloads nginx after renewal. See the
+[official Certbot IP-certificate procedure](https://letsencrypt.org/2026/03/11/shorter-certs-certbot/).
+Issuance depends on the CA and public reachability. Certificate/startup failure
+restores prior owned nginx/service/configuration files and service activation.
+Installed packages and issued certificate artifacts remain after rollback.
+
+Private configuration is saved to `/etc/splitforge/web.json`. Python listens on
+loopback port 8765, separately from the public port; use `--backend-port` if that
+internal port is occupied. The public proxy validates Host and Origin before
+forwarding to Python. Its file is `/etc/nginx/conf.d/splitforge-web.conf`. The
+known legacy SplitForge proxy can be migrated with a private backup; unrelated
+unmanaged proxy files are not overwritten.
+
+```sh
+sudo systemctl status splitforge-web.service --no-pager
+sudo systemctl status splitforge-web-renew.timer --no-pager
+sudo journalctl -u splitforge-web.service --no-pager -n 50
+sudo cat /etc/splitforge/web.token
+```
+
+Open the printed URL and enter the token. Never share it. Explicit public HTTP
+exposes credential/session traffic to observers; local HTTP uses SSH encryption.
+Use the setup-managed proxy for direct public access, retaining its protections.
+
+### Foreground mode / SSH forwarding
+
+To skip the wizard and run the loopback backend in the foreground:
+
 ```sh
 sudo splitforge update
-sudo splitforge web
+sudo splitforge web --foreground
 ```
 
 The panel listens on `127.0.0.1:8765`. On first start it creates a random access
@@ -109,7 +176,7 @@ in memory; restarting the panel clears them. Profile/app state remains on disk.
 ## Custom options
 
 ```sh
-sudo splitforge --state /root/private/state.json web --port 9000 --token-file /root/private/web.token
+sudo splitforge --state /root/private/state.json web --foreground --port 9000 --token-file /root/private/web.token
 ```
 
 Forward port 9000 to port 9000 in that case. Global `--state` precedes `web`.
@@ -119,7 +186,7 @@ sessions. To rotate access, stop the panel, replace the file with a fresh random
 token under those permissions, then restart it. The server does not print tokens
 or place them in URLs/browser local storage.
 
-## Optional persistent systemd service
+## Manual persistent systemd service (advanced)
 
 Create `/etc/systemd/system/splitforge-web.service` with your editor:
 
@@ -132,7 +199,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/splitforge web --host 127.0.0.1 --port 8765
+ExecStart=/usr/local/bin/splitforge web --foreground --host 127.0.0.1 --port 8765
 Restart=on-failure
 RestartSec=3
 UMask=0077
@@ -160,7 +227,8 @@ An administrator token grants management authority over root workloads. Treat it
 like an SSH credential. Sessions use HttpOnly/SameSite cookies, CSRF tokens,
 Host/Origin checks and a bounded sign-in failure rate. Assets are packaged locally;
 there are no external script/font/CDN dependencies. Responses disable caching and
-framing. This is a local operator interface, not an audited public hosting service.
+framing. Public access uses the setup-managed proxy. This is an administrator
+interface without separate roles, not an externally audited hosting platform.
 
 Tests cover HTTP auth/session expiry/logout, CSRF/origin/host rejection, demo
 no-mutation behavior, request limits, secret filtering and serialized jobs. An

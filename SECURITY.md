@@ -24,13 +24,17 @@ There is no completed security audit or production/SSH-safety certification.
 
 ## Configuration secrets
 
-The web panel binds only to loopback and requires its private access token;
-remote access uses SSH forwarding. The token grants privileged control of
+The Python web backend binds only to loopback and requires its private access
+token. `web setup` can put nginx in front for public HTTPS access, with public
+Host/Origin checks and Secure/HttpOnly/SameSite cookies, or keep access local
+through SSH forwarding. Explicit `--no-tls` selects unencrypted public HTTP;
+credentials and sessions on that connection are not confidential.
+The token grants privileged control of
 workloads and must be protected like an SSH credential. Sessions expire after
 eight hours and are invalidated by restart/logout. Host/Origin and CSRF checks
 protect mutation endpoints; browser assets have no third-party dependencies.
-The interface is for a trusted local administrator, not a public multi-tenant
-service. See [web access and token handling](docs/WEB_PANEL.md).
+The interface grants full administrator authority; it has no separate roles or
+multi-tenant isolation. See [web access and token handling](docs/WEB_PANEL.md).
 
 Saved profile configuration/private keys are not returned by the web state API.
 Authenticated journal output and application command arguments can still contain

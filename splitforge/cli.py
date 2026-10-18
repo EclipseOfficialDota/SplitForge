@@ -25,10 +25,12 @@ profiles = typer.Typer(help="Import, start, inspect and remove tunnel profiles."
 apps = typer.Typer(help="Register scripts, binaries and existing services.")
 deps = typer.Typer(help="Inspect or install protocol dependencies.")
 users = typer.Typer(help="Route future systemd user-manager workloads.")
+web_app = typer.Typer(invoke_without_command=True, help="Set up and run the web control panel.")
 app.add_typer(profiles, name="profile")
 app.add_typer(apps, name="app")
 app.add_typer(deps, name="dependencies")
 app.add_typer(users, name="user")
+app.add_typer(web_app, name="web")
 console = Console()
 
 
@@ -293,15 +295,52 @@ def update(ctx: typer.Context,
     update_installation(ctx.find_root().obj["state"], prefix=prefix, force=force, report=typer.echo)
 
 
-@app.command("web")
+@web_app.callback()
 def web(ctx: typer.Context,
         host: str = typer.Option("127.0.0.1", "--host", help="Loopback host; use an SSH forward for remote access."),
         port: int = typer.Option(8765, "--port", min=1, max=65535),
         token_file: Path = typer.Option(Path("/etc/splitforge/web.token"), "--token-file"),
-        demo: bool = typer.Option(False, "--demo", help="Read-only sample dashboard; no root or token required.")):
+        demo: bool = typer.Option(False, "--demo", help="Read-only sample dashboard; no root or token required."),
+        foreground: bool = typer.Option(False, "--foreground", help="Run the HTTP backend directly; used by systemd.")):
     """Open the authenticated macOS-style web control panel."""
+    if ctx.invoked_subcommand is not None:
+        return
     from splitforge.web.server import serve
-    serve(ctx.find_root().obj["state"], host=host, port=port, token_file=token_file, demo=demo)
+    state = ctx.find_root().obj["state"]
+    if not demo and not foreground and sys.stdin.isatty():
+        from splitforge.web.setup import load_settings, wizard
+        settings = load_settings()
+        if settings is None:
+            wizard(state)
+        else:
+            require_root()
+            run(["systemctl", "start", "splitforge-web.service"])
+            typer.echo(f"Panel ready: {settings.url}\nAccess token file: {settings.token_file}")
+        return
+    serve(state, host=host, port=port, token_file=token_file, demo=demo)
+
+
+@web_app.command("setup")
+def web_setup(ctx: typer.Context,
+              address: str | None = typer.Option(None, "--address", help="Domain or public IP. Omit for the wizard."),
+              tls: bool = typer.Option(True, "--tls/--no-tls", help="Request a trusted SSL certificate automatically."),
+              local: bool = typer.Option(False, "--local", help="Local HTTP with SSH forwarding."),
+              port: int = typer.Option(9090, "--port", min=1, max=65535),
+              backend_port: int = typer.Option(8765, "--backend-port", min=1, max=65535),
+              email: str = typer.Option("", "--email"),
+              token_file: Path = typer.Option(Path("/etc/splitforge/web.token"), "--token-file"),
+              agree_tos: bool = typer.Option(False, "--agree-tos", help="Accept Let's Encrypt's subscriber agreement.")):
+    """Configure first launch, HTTPS, permanent service and certificate renewal."""
+    from splitforge.web.setup import WebSettings, deploy, wizard
+    state = ctx.find_root().obj["state"]
+    if address is None and not local:
+        if not sys.stdin.isatty():
+            raise ValueError("Use an interactive terminal or supply --address / --local")
+        wizard(state)
+        return
+    settings = WebSettings(mode="local" if local else "https" if tls else "http", address=address or "",
+                           port=port, backend_port=backend_port, email=email, state=str(state), token_file=str(token_file))
+    deploy(settings, agree_tos=agree_tos, report=typer.echo)
 
 
 @app.command("restore")
