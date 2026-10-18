@@ -195,6 +195,22 @@ Reopen the checklist to retry missing items. Detection means an executable is on
 PATH, not that its version or upstream connection is healthy. Source builds can
 take several minutes. Closing a browser does not cancel a submitted operation.
 
+Downloads stream with byte limits and real progress percentages when the server
+supplies a total size. Unknown-length transfers and source compilation are
+indeterminate; completion is not fabricated. Transient network/408/429/5xx
+failures get up to three attempts per source. Go uses its official distribution
+mirrors; GitHub release downloads can use the matching official release asset API.
+The same pinned SHA-256 is mandatory for every source; invalid content is never
+installed or cached. A permanent HTTP failure moves to the next official source.
+
+Verified artifacts are cached privately in `/var/cache/splitforge-downloads`
+using the expected digest plus filename. Future installs can reuse them offline.
+The existing `SPLITFORGE_DOWNLOAD_CACHE` environment setting also accepts
+pre-fetched files named like the original archive; those must match the pinned
+digest too. A corrupt cache is reported rather than trusted. An unwritable cache
+does not discard a successful verified network transfer. Cache contents can be
+removed separately when you need disk space; installed executables are retained.
+
 Ctrl+C stops a foreground panel after waiting for the active operation. Managed
 workloads continue running when the web panel exits. Job history and sessions are
 in memory; restarting the panel clears them. Profile/app state remains on disk.

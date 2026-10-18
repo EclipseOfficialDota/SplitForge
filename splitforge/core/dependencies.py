@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import io
 import os
 import platform
@@ -9,9 +10,12 @@ import re
 import shutil
 import tarfile
 import tempfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from splitforge.core.netns import require_root, run
 
@@ -70,26 +74,123 @@ GO_DIGESTS = {"x86_64": ("amd64", "031f088e5d955bab8657ede27ad4e3bc5b7c1ba281f05
               "aarch64": ("arm64", "a290581cfe4fe28ddd737dde3095f3dbeb7f2e4065cab4eae44dfc53b760c2f7")}
 
 
-def download(url: str, expected: str, limit: int) -> bytes:
-    """Accept a pre-fetched offline artifact only after the same digest check."""
-    cache = os.environ.get("SPLITFORGE_DOWNLOAD_CACHE")
-    cached = Path(cache) / url.rsplit("/", 1)[-1] if cache else None
-    if cached and cached.is_symlink():
-        raise ValueError("Download cache entries must not be symlinks")
-    if cached and cached.is_file():
-        if cached.stat().st_size > limit:
-            raise RuntimeError("Cached release exceeds size limit")
-        data = cached.read_bytes()
-    else:
-        request = urllib.request.Request(url, headers={"User-Agent": "SplitForge/2.0"})
+CACHE_ROOT = Path('/var/cache/splitforge-downloads')
+
+
+def progress_text(event: dict) -> str:
+    detail = (f'{event["percent"]}%' if event.get('percent') is not None else
+              f'{event["downloaded"]} bytes' if 'downloaded' in event else 'working')
+    return f'{event["asset"]}: {event["phase"]} · {detail}'
+
+
+def _alternatives(url: str):
+    parsed = urlsplit(url)
+    filename = Path(parsed.path).name
+    if parsed.hostname == 'go.dev' and parsed.path.startswith('/dl/'):
+        yield 'https://dl.google.com/go/' + filename
+        yield 'https://golang.google.cn/dl/' + filename
+    elif parsed.hostname == 'github.com':
+        parts = parsed.path.strip('/').split('/')
+        if len(parts) != 6 or parts[2:4] != ['releases', 'download']:
+            return
+        import json
+        request = urllib.request.Request(f'https://api.github.com/repos/{parts[0]}/{parts[1]}/releases/tags/{parts[4]}',
+                                         headers={'User-Agent': 'SplitForge', 'Accept': 'application/vnd.github+json'})
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                data = response.read(limit + 1)
-        except OSError as error:
-            raise RuntimeError(f"Download failed for {url.rsplit('/', 1)[-1]}; check upstream access or provide a verified offline cache") from error
-    if len(data) > limit or hashlib.sha256(data).hexdigest() != expected:
-        raise RuntimeError("Release/source checksum verification failed; nothing installed")
-    return data
+            with urllib.request.urlopen(request, timeout=20) as response:
+                document = response.read(2_000_001)
+            if len(document) > 2_000_000:
+                return
+            for asset in json.loads(document).get('assets', []):
+                if asset.get('name') == filename and isinstance(asset.get('id'), int):
+                    yield f'https://api.github.com/repos/{parts[0]}/{parts[1]}/releases/assets/{asset["id"]}'
+        except (OSError, ValueError, TypeError) as error:
+            if isinstance(error, urllib.error.HTTPError):
+                error.close()
+            return
+
+
+def download(url: str, expected: str, limit: int, *, progress=None) -> bytes:
+    """Retry official sources, stream bounded data, and cache only digest-verified bytes."""
+    import itertools
+    filename = Path(urlsplit(url).path).name
+    if not re.fullmatch(r'[0-9a-f]{64}', expected) or not filename or limit <= 0:
+        raise ValueError('Downloads require a pinned SHA-256, filename and positive size limit')
+    def emit(phase, downloaded=0, total=None, attempt=1):
+        if progress:
+            progress({'asset': filename, 'phase': phase, 'downloaded': downloaded, 'total': total,
+                      'percent': min(100, int(downloaded * 100 / total)) if total else None, 'attempt': attempt})
+    offline = os.environ.get('SPLITFORGE_DOWNLOAD_CACHE')
+    candidates = ([Path(offline) / filename] if offline else []) + [CACHE_ROOT / (expected + '-' + filename), CACHE_ROOT / filename]
+    for cached in dict.fromkeys(candidates):
+        if cached.is_symlink():
+            raise ValueError('Download cache entries must not be symlinks')
+        if cached.is_file():
+            if cached.stat().st_size > limit:
+                raise RuntimeError('Cached release exceeds size limit')
+            data = cached.read_bytes()
+            if len(data) > limit or hashlib.sha256(data).hexdigest() != expected:
+                raise RuntimeError('Cached release/source checksum verification failed; nothing installed')
+            emit('verified cache', len(data), len(data))
+            return data
+    error = None
+    for source in itertools.chain([url], _alternatives(url)):
+        for attempt in range(1, 4):
+            try:
+                emit('connecting' if attempt == 1 else 'retry', attempt=attempt)
+                request = urllib.request.Request(source, headers={'User-Agent': 'SplitForge', 'Accept': 'application/octet-stream'})
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    header = response.headers.get('Content-Length', '')
+                    total = int(header) if header.isdecimal() else None
+                    if total is not None and total > limit:
+                        raise RuntimeError('Release exceeds size limit; nothing installed')
+                    data = bytearray()
+                    previous = -1
+                    while True:
+                        chunk = response.read(min(262144, limit + 1 - len(data)))
+                        if not chunk:
+                            break
+                        data.extend(chunk)
+                        if len(data) > limit:
+                            raise RuntimeError('Release exceeds size limit; nothing installed')
+                        bucket = int(len(data) * 100 / total) // 5 if total else len(data) // 1048576
+                        if bucket != previous:
+                            emit('downloading', len(data), total, attempt)
+                            previous = bucket
+                    if total is not None and len(data) != total:
+                        raise OSError('Incomplete download')
+                emit('verifying SHA-256', len(data), len(data), attempt)
+                if hashlib.sha256(data).hexdigest() != expected:
+                    raise RuntimeError('Release/source checksum verification failed; nothing installed')
+                data = bytes(data)
+                # Installation must still succeed if a read-only cache cannot be populated.
+                try:
+                    if CACHE_ROOT.is_symlink():
+                        raise ValueError('Managed download cache must not be a symlink')
+                    CACHE_ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    fd, temporary = tempfile.mkstemp(dir=CACHE_ROOT, prefix='.download-')
+                    try:
+                        with os.fdopen(fd, 'wb') as output:
+                            output.write(data)
+                            output.flush()
+                            os.fsync(output.fileno())
+                        os.replace(temporary, CACHE_ROOT / (expected + '-' + filename))
+                    finally:
+                        Path(temporary).unlink(missing_ok=True)
+                except OSError:
+                    emit('verified; cache unavailable', len(data), len(data), attempt)
+                emit('verified', len(data), len(data), attempt)
+                return data
+            except (OSError, http.client.HTTPException) as failure:
+                error = failure
+                if isinstance(failure, urllib.error.HTTPError):
+                    failure.close()
+                if isinstance(failure, urllib.error.HTTPError) and failure.code not in {408, 429, 500, 502, 503, 504}:
+                    break
+                if attempt < 3:
+                    time.sleep(0.5 * 2 ** (attempt - 1))
+    code = f' HTTP {error.code}' if isinstance(error, urllib.error.HTTPError) else ''
+    raise RuntimeError(f'Download failed for {filename}{code}; official sources exhausted. Supply a SHA-256-verified offline cache.') from error
 
 
 def unpack_verified_tar(data: bytes, base: Path):
@@ -112,9 +213,9 @@ def unpack_verified_tar(data: bytes, base: Path):
                 raise RuntimeError("Unsupported archive entry")
 
 
-def install_dnstt(destination: Path) -> str:
+def install_dnstt(destination: Path, *, progress=None) -> str:
     url = f"https://codeload.github.com/Mygod/dnstt/tar.gz/{DNSTT_REVISION}"
-    data = download(url, DNSTT_SHA256, 5_000_000)
+    data = download(url, DNSTT_SHA256, 5_000_000, progress=progress)
     with tempfile.TemporaryDirectory(prefix="splitforge-dnstt-") as directory:
         base = Path(directory).resolve()
         unpack_verified_tar(data, base)
@@ -130,10 +231,12 @@ def install_dnstt(destination: Path) -> str:
             if arch not in GO_DIGESTS:
                 raise ValueError("Install Go 1.24.4+ manually for this CPU architecture")
             go_arch, digest = GO_DIGESTS[arch]
-            toolchain = download(f"https://go.dev/dl/{GO_VERSION}.linux-{go_arch}.tar.gz", digest, 150_000_000)
+            toolchain = download(f"https://go.dev/dl/{GO_VERSION}.linux-{go_arch}.tar.gz", digest, 150_000_000, progress=progress)
             unpack_verified_tar(toolchain, base)
             compiler = str(base / "go/bin/go")
         proxy = os.environ.get("GOPROXY", "https://proxy.golang.org|direct")
+        if progress:
+            progress({'asset': 'dnstt-client', 'phase': 'building pinned source', 'percent': None})
         result = run(["env", "GOTOOLCHAIN=local", "CGO_ENABLED=0", f"GOPROXY={proxy}", compiler,
                       "-C", str(roots[0]), "build", "-trimpath", "-o", str(binary), "./dnstt-client"], timeout=600, check=False)
         if result.returncode:
@@ -155,10 +258,10 @@ def install_dnstt(destination: Path) -> str:
     return f"Built dnstt-client from SHA-256-verified source {DNSTT_REVISION[:12]}"
 
 
-def install(name: str, destination: Path = Path("/usr/local/bin")) -> str:
+def install(name: str, destination: Path = Path("/usr/local/bin"), *, progress=None) -> str:
     require_root()
     if name == "dnstt-client":
-        return install_dnstt(destination)
+        return install_dnstt(destination, progress=progress)
     if name in PACKAGES:
         run(["apt-get", "update"], timeout=180)
         run(["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y",
@@ -171,7 +274,7 @@ def install(name: str, destination: Path = Path("/usr/local/bin")) -> str:
     if arch not in assets:
         raise ValueError("Automatic downloads support Linux x86_64 and aarch64")
     filename, expected = assets[arch]
-    data = download(f"https://github.com/{repository}/releases/download/{version}/{filename}", expected, 100_000_000)
+    data = download(f"https://github.com/{repository}/releases/download/{version}/{filename}", expected, 100_000_000, progress=progress)
     # Read just the intended regular executable; never extract archive paths.
     if filename.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

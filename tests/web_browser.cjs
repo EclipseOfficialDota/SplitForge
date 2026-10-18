@@ -167,10 +167,29 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
           },
         ],
       };
+      body.jobs = [
+        {
+          id: "download-fixture",
+          action: "cores.install",
+          state: "running",
+          created: Date.now() / 1000,
+          messages: ["fixture.zip: downloading · 42%"],
+          error: "",
+          progress: { asset: "fixture.zip", phase: "downloading", percent: 42 },
+        },
+      ];
       await route.fulfill({ response, json: body });
     });
     await page.locator("#refresh-button").click();
-    await page.getByText("Fixture DNS check failed", { exact: false }).waitFor();
+    await page
+      .getByText("Fixture DNS check failed", { exact: false })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("progressbar", { name: "Download progress" })
+        .getAttribute("value"),
+      "42",
+    );
     await page.unroute("**/api/state");
     await page
       .getByRole("button", { name: "Quick start", exact: false })

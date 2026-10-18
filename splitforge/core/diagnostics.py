@@ -95,7 +95,7 @@ def diagnose(store, manager, runner, *, repair=False, report=print, route_baseli
         if not installed and repair:
             try:
                 report(f'Installing required component: {name}')
-                report(dependencies.install(name))
+                report(dependencies.install(name, progress=report))
                 fixed = installed = dependencies.component_installed(name)
             except Exception as error:
                 report(f'Component repair failed: {name}: {str(error)[:300]}')

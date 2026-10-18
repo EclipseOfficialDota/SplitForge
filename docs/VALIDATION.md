@@ -18,6 +18,14 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.4.2: **77 tests passed with root integration enabled**, plus the browser
+suite, lint, build and documentation checks. Local HTTP download tests cover 503
+retry, alternative source, actual streamed percentage/unknown-size progress,
+truncated response retries, corrupt digest/size rejection, offline reuse and
+cache-write failure. A separate real build used the pinned Go/source offline
+artifacts to produce/install DNSTT into a temporary directory and execute its
+help flags. The browser suite verifies the progress bar's 42% fixture value.
+
 Version 2.4.1: **69 tests passed with root integration enabled** locally, plus
 the desktop/mobile browser suite, lint, distribution build and documentation
 checks. The diagnostics integration injects an unconditional namespace firewall

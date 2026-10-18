@@ -215,7 +215,7 @@ class SplitForgeApp(App):
     def install_cores(self, names):
         if not names:
             return
-        from splitforge.core.dependencies import component_installed, component_plan, install
+        from splitforge.core.dependencies import component_installed, component_plan, install, progress_text
         names = component_plan(names)
         self.action_navigate("logs")
 
@@ -224,7 +224,10 @@ class SplitForgeApp(App):
             for index, name in enumerate(names):
                 self.call_from_thread(self.core_progress, index, len(names), f"Installing {name}…")
                 try:
-                    result = f"{name}: already installed; skipped" if component_installed(name) else install(name)
+                    def progress(event):
+                        completed = index + (event.get('percent') or 0) / 100
+                        self.call_from_thread(self.core_progress, completed, len(names), progress_text(event))
+                    result = f"{name}: already installed; skipped" if component_installed(name) else install(name, progress=progress)
                 except Exception as failure:
                     failures.append(name)
                     result = f"ERROR · {name}: {failure}"
@@ -235,7 +238,7 @@ class SplitForgeApp(App):
         self.perform(operation, "Selected cores processed; see individual results in Logs & Tools")
 
     def core_progress(self, completed, total, message):
-        self.query_one("#dependency-status", Static).update(Text(f"{completed}/{total} · {message}"))
+        self.query_one("#dependency-status", Static).update(Text(f"{completed:g}/{total} · {message}"))
         self.query_one("#dependency-progress", ProgressBar).update(total=total, progress=completed)
         self.append_log(message)
 

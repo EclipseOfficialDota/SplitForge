@@ -104,7 +104,7 @@ function operations() {
     .slice(0, 6)
     .map(
       (job) =>
-        `<div class="operation ${e(job.state)}"><strong>${e(job.action)} · ${e(job.state.toUpperCase())}</strong><p>${e(job.error || job.messages.slice(-3).join("\n") || "Working…")}</p></div>`,
+        `<div class="operation ${e(job.state)}"><strong>${e(job.action)} · ${e(job.state.toUpperCase())}</strong>${job.progress ? `<progress class="download-progress" max="100" ${Number.isFinite(job.progress.percent) ? `value="${Math.max(0, Math.min(100, job.progress.percent))}"` : ""} aria-label="Download progress"></progress>` : ""}<p>${e(job.error || job.messages.slice(-3).join("\n") || "Working…")}</p></div>`,
     )
     .join("")}</div>`;
 }

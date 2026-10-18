@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.2 — 2026-10-18
+
+- Bounded streaming downloads with three attempts for transient failures,
+  alternate official Go/GitHub sources and accurate byte/percentage progress.
+- Automatic private SHA-256-keyed artifact cache, existing offline cache support,
+  no unverified cache writes and hard failure on checksum/size violations.
+- Web progress bars and terminal/CLI progress reports, including indeterminate
+  source-build/unknown-length phases. Successful verified downloads remain usable
+  when the optional cache is unavailable.
+
 ## 2.4.1 — 2026-10-18
 
 - Health checks and explicit repair in Live logs: required cores, systemd/TUN,

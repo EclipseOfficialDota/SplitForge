@@ -270,8 +270,8 @@ def dependencies_list():
 
 @deps.command("install")
 def dependencies_install(name: str):
-    from splitforge.core.dependencies import install
-    typer.echo(install(name))
+    from splitforge.core.dependencies import install, progress_text
+    typer.echo(install(name, progress=lambda event: typer.echo(progress_text(event))))
 
 
 @app.command("doctor")

@@ -145,6 +145,9 @@ class Panel:
 
     def _message(self, job, message):
         with self.lock:
+            if isinstance(message, dict):
+                job['progress'] = dict(message)
+                message = dependencies.progress_text(message)
             job["messages"].append(str(message)[:1000])
             del job["messages"][:-30]
 
@@ -220,7 +223,7 @@ class Panel:
             for name in dependencies.component_plan(names):
                 report(f"Checking {name}…")
                 try:
-                    report(f"{name}: already installed; skipped" if dependencies.component_installed(name) else dependencies.install(name))
+                    report(f"{name}: already installed; skipped" if dependencies.component_installed(name) else dependencies.install(name, progress=report))
                 except Exception as error:
                     failures.append(name)
                     report(f"Failed {name}: {error}")
