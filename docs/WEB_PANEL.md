@@ -152,6 +152,32 @@ restart every app stopped with it; use App Router deliberately.
 
 ## Jobs, refresh and failure behavior
 
+### Health checks and repair
+
+In **Live logs**, choose **Check health** for a read-only scan or **Check & repair**
+for explicitly approved repairs. Results include category/scope, error or warning,
+an explanation, suggested next step and a repaired badge when applicable.
+
+Checks cover required cores, systemd/TUN, saved enabled workloads, each active
+tunnel's lifecycle, default route, namespace/host guard, DNS files and a fresh
+namespace HTTPS/DNS probe. Stopped, unneeded profiles are left stopped. Web
+listeners and the certificate renewal timer are checked when `web setup` has
+saved a deployment. Host DNS and the startup host-route baseline are also checked.
+
+Repair installs missing required cores, rebuilds inconsistent managed tunnel
+namespaces, and restarts their saved enabled applications inside the same assigned
+tunnel. Open connections close; this restart is stated in the confirmation.
+Managed nginx configuration/renewal scheduling may be reactivated. Host routing,
+SSH, host resolver configuration and provider firewall policies are not reset.
+The worker cannot restart its own web service; service/configuration failures
+include commands or setup instructions for the operator.
+
+A successful check job means the scan completed, not that all checks passed.
+Review its error/warning counts. External/cloud firewall behavior cannot be
+proven by checking the local host; this is shown as a warning requiring an
+independent connection. Protocol/provider failures still require valid remote
+servers and credentials. The result/history is kept in memory until panel restart.
+
 Mutations run sequentially in a background worker and return a job ID immediately.
 The UI polls state every three seconds. The operation banner and job messages
 show progress; simultaneous mutations receive a busy response. DNS/core selection

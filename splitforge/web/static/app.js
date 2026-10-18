@@ -211,8 +211,12 @@ function logsPage() {
       "",
       "WORKSPACE / LOGS",
     ) +
-    `<section class="panel"><div class="panel-header"><h2><span>›_</span> journalctl · splitforge-*</h2><div class="log-toolbar"><label class="check-inline"><input type="checkbox" id="follow-logs" checked> Follow</label><button class="text-button" data-action="refresh-logs">Refresh ↻</button></div></div><pre class="log-output" id="journal-output">Reading journal…</pre></section>${operations()}`
+    `<div id="diagnostics-panel">${diagnosticsPanel()}</div><section class="panel"><div class="panel-header"><h2><span>›_</span> journalctl · splitforge-*</h2><div class="log-toolbar"><label class="check-inline"><input type="checkbox" id="follow-logs" checked> Follow</label><button class="text-button" data-action="refresh-logs">Refresh ↻</button></div></div><pre class="log-output" id="journal-output">Reading journal…</pre></section>${operations()}`
   );
+}
+function diagnosticsPanel() {
+  const result = state.diagnostics;
+  return `<section class="panel"><div class="panel-header"><h2>◇ Health & repair / بررسی و تعمیر</h2><div class="row-actions">${button("Check health", "diagnostics-check", "", "", state.busy)}${button("Check & repair", "diagnostics-repair", "", "primary", state.busy)}</div></div><div class="form-panel"><p>Checks cores, DNS, tunnel guards, managed applications and web ports. Repair may restart managed workloads; open connections close. Host routing and SSH settings are never reset.</p>${result ? `<p class="mono">${e(result.errors)} errors · ${e(result.warnings)} warnings · ${e(new Date(result.updated * 1000).toLocaleString())}</p><div class="table-wrap"><table><thead><tr><th>Check / scope</th><th>State</th><th>Finding / next step</th></tr></thead><tbody>${result.checks.map((row) => `<tr><td>${e(row.category)}<div class="mono">${e(row.scope)}</div></td><td><span class="badge ${row.status === "ok" ? "" : "offline"}">${e(row.status.toUpperCase())}${row.repaired ? " · REPAIRED" : ""}</span></td><td>${e(row.message)}${row.remedy ? `<div class="field-hint">${e(row.remedy)}</div>` : ""}</td></tr>`).join("")}</tbody></table></div>` : '<p class="field-hint">Run a check to see actionable results. Checks do not install or restart anything unless repair is selected.</p>'}</div></section>`;
 }
 const lessons = {
   en: [
@@ -342,6 +346,8 @@ async function poll() {
     state = next;
     $("#connection-banner").hidden = true;
     renderStatus();
+    if (page === "logs" && $("#diagnostics-panel"))
+      $("#diagnostics-panel").innerHTML = diagnosticsPanel();
     if (!previous || ["overview", "router", "profiles"].includes(page)) {
       const focus = document.activeElement?.id,
         position = focus === "search" ? $("#search")?.selectionStart : null;
@@ -538,6 +544,13 @@ document.addEventListener("click", async (event) => {
       );
     } else if (["profile.start", "profile.test"].includes(action))
       await sendAction({ action, id });
+    else if (action === "diagnostics-check")
+      await sendAction({ action: "diagnostics.run", repair: false });
+    else if (action === "diagnostics-repair")
+      openModal(
+        "Check & repair?",
+        `<form id="diagnostics-repair-form"><p>Repairs required cores and SplitForge-owned tunnel/DNS/guard resources. Enabled managed apps may restart and their open connections will close. Host routing, SSH and provider firewall settings are retained.</p><div id="form-error" class="form-error"></div><div class="modal-actions"><button type="button" class="button" data-action="cancel">Cancel</button><button type="submit" class="button primary">Check & repair now</button></div></form>`,
+      );
     else if (action === "refresh-logs") {
       if ($("#follow-logs")) $("#follow-logs").checked = true;
       await loadLogs();
@@ -576,7 +589,13 @@ document.addEventListener("submit", async (event) => {
   const form = event.target,
     formId = form.getAttribute("id");
   if (
-    !["action-form", "dns-form", "cores-form", "browse-form"].includes(formId)
+    ![
+      "action-form",
+      "dns-form",
+      "cores-form",
+      "browse-form",
+      "diagnostics-repair-form",
+    ].includes(formId)
   )
     return;
   event.preventDefault();
@@ -586,6 +605,10 @@ document.addEventListener("submit", async (event) => {
     const data = Object.fromEntries(new FormData(form));
     if (formId === "browse-form") {
       await browse(data.path);
+      return;
+    }
+    if (formId === "diagnostics-repair-form") {
+      await sendAction({ action: "diagnostics.run", repair: true });
       return;
     }
     if (formId === "cores-form") {

@@ -73,6 +73,11 @@ class WebLinuxTests(unittest.TestCase):
                     action({"action": "profile.remove", "id": profile.id})
                     self.assertEqual(panel.store.apps(), [])
                     self.assertEqual(panel.store.profiles(), [])
+                    action({"action": "diagnostics.run", "repair": False})
+                    status, snapshot, _ = request("GET", "/api/state")
+                    self.assertEqual(status, 200)
+                    self.assertIsInstance(snapshot["diagnostics"]["checks"], list)
+                    self.assertTrue(any(row["category"] == "dns" for row in snapshot["diagnostics"]["checks"]))
                 finally:
                     if panel.worker:
                         panel.worker.join(timeout=40)

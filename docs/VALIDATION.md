@@ -18,6 +18,15 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.4.1: **69 tests passed with root integration enabled** locally, plus
+the desktop/mobile browser suite, lint, distribution build and documentation
+checks. The diagnostics integration injects an unconditional namespace firewall
+accept rule and a bad DNS file, detects both, rebuilds the tunnel, restores its
+root workload in the same saved assignment, verifies fresh egress and compares
+the host main route before/after. The authenticated HTTP integration also runs
+the diagnostic action and receives structured results. Browser checks cover
+scan/repair controls, confirmation, read-only demo refusal and finding rendering.
+
 Version 2.4.0 setup checks include address/config injection rejection, separate
 domain/IP ACME flags and certificate lineages, first interactive launch, private
 saved settings, renewal scheduling, certificate failure rollback and failed public

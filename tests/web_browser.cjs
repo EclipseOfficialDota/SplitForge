@@ -132,6 +132,47 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       .filter({ hasText: "Control plane ready" })
       .waitFor();
     await page
+      .getByRole("button", { name: "Check health", exact: true })
+      .click();
+    await page
+      .locator("#toast")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Check & repair", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Check & repair now", exact: true })
+      .click();
+    await page
+      .locator("#form-error")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await page.route("**/api/state", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.diagnostics = {
+        errors: 1,
+        warnings: 0,
+        updated: Date.now() / 1000,
+        checks: [
+          {
+            category: "dns",
+            scope: "fixture",
+            status: "error",
+            message: "Fixture DNS check failed",
+            remedy: "Inspect encrypted DNS settings",
+            repaired: false,
+          },
+        ],
+      };
+      await route.fulfill({ response, json: body });
+    });
+    await page.locator("#refresh-button").click();
+    await page.getByText("Fixture DNS check failed", { exact: false }).waitFor();
+    await page.unroute("**/api/state");
+    await page
       .getByRole("button", { name: "Quick start", exact: false })
       .click();
     await page.getByRole("button", { name: "فارسی", exact: true }).click();

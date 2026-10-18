@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.1 — 2026-10-18
+
+- Health checks and explicit repair in Live logs: required cores, systemd/TUN,
+  tunnel lifecycle, namespace routes/guards/DNS, egress, workloads and web ports.
+- Structured findings, suggested fixes, repaired-state badges and asynchronous
+  progress. Repair reinstates owned namespaces and enabled workloads using their
+  saved tunnel assignments; Direct is never selected as a repair fallback.
+- Real injected firewall/DNS damage test verifies root workload recovery and
+  unchanged host routes. Provider firewall visibility remains explicitly limited.
+
 ## 2.4.0 — 2026-10-18
 
 - First interactive `splitforge web` launch opens a setup wizard before serving.

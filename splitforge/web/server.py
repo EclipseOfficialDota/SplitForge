@@ -60,6 +60,7 @@ class Panel:
         self.cache_lock = threading.Lock()
         self.route_baseline = None if demo else self._host_routes()
         self.worker = None
+        self.diagnostics = None
 
     @staticmethod
     def _host_routes():
@@ -74,6 +75,7 @@ class Panel:
         with self.lock:
             result["jobs"] = [dict(job, messages=list(job["messages"])) for job in self.jobs]
             result["busy"] = self.busy
+            result["diagnostics"] = self.diagnostics
         return result
 
     def _snapshot(self):
@@ -114,7 +116,7 @@ class Panel:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
                 "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
-                "profile.dns", "app.add", "app.bind", "app.stop", "app.remove", "cores.install"}:
+                "profile.dns", "app.add", "app.bind", "app.stop", "app.remove", "cores.install", "diagnostics.run"}:
             raise ValueError("Unknown action")
         with self.lock:
             if self.busy:
@@ -156,7 +158,17 @@ class Panel:
     def _dispatch(self, data, report):
         action = data["action"]
         target = self._text(data, "id", limit=80)
-        if action == "profile.import":
+        if action == "diagnostics.run":
+            repair = data.get('repair', False)
+            if not isinstance(repair, bool):
+                raise ValueError('repair must be a boolean')
+            from splitforge.core.diagnostics import diagnose
+            result = diagnose(self.store, self.manager, self.runner, repair=repair, report=report,
+                              route_baseline=self.route_baseline)
+            with self.lock:
+                self.diagnostics = result
+            report(f'Checks completed: {result["errors"]} errors, {result["warnings"]} warnings')
+        elif action == "profile.import":
             profile = self.manager.import_profile(self._text(data, "source"),
                 name=self._text(data, "name", limit=80) or None, replace_id=target or None)
             report(f"Saved profile {profile.name}")
