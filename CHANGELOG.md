@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.8.1 — 2026-10-19
+
+- Generated web units explicitly use null stdin and avoid the newer foreground
+  flag, preserving listener compatibility when rolling back to web-capable 2.3.
+
 ## 2.8.0 — 2026-10-19
 
 - Independent per-service kernel IP counters, persistent tunnel/interface totals,

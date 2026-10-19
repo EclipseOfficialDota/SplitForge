@@ -111,7 +111,9 @@ def suggested_ip() -> str:
 
 
 def service_text(settings: WebSettings) -> str:
-    command = [sys.executable, '-m', 'splitforge', '--state', settings.state, 'web', '--foreground',
+    # systemd supplies null stdin; omit the newer interactive-only override so
+    # the same listener unit remains usable after rollback to web-capable 2.3.
+    command = [sys.executable, '-m', 'splitforge', '--state', settings.state, 'web',
                '--host', '127.0.0.1', '--port', str(settings.internal_port), '--token-file', settings.token_file]
     return MARKER + f'''[Unit]
 Description=SplitForge web control panel
@@ -121,6 +123,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
+StandardInput=null
 ExecStart={' '.join(unit_word(word) for word in command)}
 Restart=on-failure
 RestartSec=3

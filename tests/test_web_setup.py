@@ -37,7 +37,8 @@ class WebSetupTests(unittest.TestCase):
         self.assertIn('shortlived', command)
         self.assertIn('--webroot', command)
         self.assertNotEqual(domain.cert_name, ip.cert_name)
-        self.assertIn('--foreground', setup.service_text(domain))
+        self.assertNotIn('--foreground', setup.service_text(domain))
+        self.assertIn('StandardInput=null', setup.service_text(domain))
 
     def test_proxy_checks_public_host_and_origin_and_default_ports(self):
         settings = setup.WebSettings(address='example.com', port=443).validate()
@@ -94,6 +95,8 @@ class WebSetupTests(unittest.TestCase):
             self.assertEqual(json.loads(setup.CONFIG.read_text()), dataclasses.asdict(settings))
             self.assertEqual(setup.CONFIG.stat().st_mode & 0o777, 0o600)
             self.assertIn('WantedBy=multi-user.target', setup.UNIT.read_text())
+            self.assertIn('StandardInput=null', setup.UNIT.read_text())
+            self.assertNotIn('--foreground', setup.UNIT.read_text())
             self.assertFalse(setup.NGINX.exists())
             self.assertTrue(any(call.args[0] == ['systemctl', 'restart', setup.UNIT.name] for call in calls.call_args_list))
 
