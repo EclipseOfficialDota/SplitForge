@@ -2,6 +2,9 @@
 
 ## 2.4.2 — 2026-10-18
 
+- Late refresh/journal callbacks tolerate dashboard shutdown; a real shutdown
+  regression check prevents the intermittent Textual worker crash seen in CI.
+
 - Bounded streaming downloads with three attempts for transient failures,
   alternate official Go/GitHub sources and accurate byte/percentage progress.
 - Automatic private SHA-256-keyed artifact cache, existing offline cache support,

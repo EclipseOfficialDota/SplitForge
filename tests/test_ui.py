@@ -11,6 +11,13 @@ from splitforge.tui.screens.help import CoreChecklist, GuideModal, LESSONS
 
 
 class InterfaceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_late_refresh_and_log_callbacks_ignore_unmounted_dashboard(self):
+        app = SplitForgeApp(demo=True)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+        app.apply_data({'profiles': [], 'apps': []}, [], [], None)
+        app.append_log('A queued log callback arrived after shutdown')
+
     async def test_navigation_and_route_modal_are_read_only_in_demo(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "absent-state.json"

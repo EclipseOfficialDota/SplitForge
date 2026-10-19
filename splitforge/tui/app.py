@@ -344,6 +344,9 @@ class SplitForgeApp(App):
             self.call_from_thread(self.append_log, "ERROR · refresh: " + str(failure))
 
     def apply_data(self, data, profiles, apps, route):
+        # A queued worker callback may arrive after the dashboard was unmounted.
+        if not self.is_running or not self.query(HomeView):
+            return
         self.data, self.current_profiles, self.current_apps = data, profiles, apps
         if self.route_baseline is None:
             self.route_baseline = route
@@ -365,8 +368,11 @@ class SplitForgeApp(App):
             self.host_ip = "unavailable"
 
     def append_log(self, line):
+        if not self.is_running:
+            return
         style = "red" if any(word in line.lower() for word in ("error", "failed", "failure")) else "cyan"
-        self.query_one("#live-log", RichLog).write(Text(line, style=style))
+        for log in self.query('#live-log').results(RichLog):
+            log.write(Text(line, style=style))
 
     def poll_journal(self):
         if self.query_one("#pages", ContentSwitcher).current == "logs":
