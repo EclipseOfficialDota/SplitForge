@@ -255,6 +255,30 @@ in memory; restarting the panel clears them. Profile/app state remains on disk.
 
 ## Custom options
 
+### Verify an application's actual route
+
+In **App router**, start the workload and click **Test route**. The check pins
+the main process's network and mount namespace descriptors, verifies that the
+actual network matches its saved assignment, and runs a capability-free HTTPS
+and DNS check as the registered user. It reads that mount namespace's
+`resolv.conf`, so it also tests the application's isolated DNS view. Direct
+workloads are checked in their actual host namespace. No proxy environment or
+host fallback is inherited. The profile's verified HTTPS probe/CA settings are
+used for tunneled workloads; Direct uses Cloudflare's trace endpoint.
+
+```sh
+sudo splitforge app test my-worker
+```
+
+Results show exit IP, configured DNS servers, resolved probe addresses, PID,
+namespace identities, HTTPS elapsed time and timestamp. A stopped, restarting
+or reassigned application fails the check. Services with `RootDirectory`/chroot
+are explicitly unsupported because the probe interpreter/trust store may differ.
+This verifies a fresh connection in those namespaces; it does not inspect
+existing sockets, application-specific proxy settings or separate child
+namespaces. Results are historical, not continuous monitoring, and disappear
+when the panel restarts. `nsenter` and `setpriv` come from Ubuntu/Debian util-linux.
+
 ```sh
 sudo splitforge --state /root/private/state.json web --foreground --port 9000 --token-file /root/private/web.token
 ```

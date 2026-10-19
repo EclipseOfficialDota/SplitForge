@@ -133,6 +133,10 @@ class WebTests(unittest.TestCase):
         self.panel.runner.bind.reset_mock()
         self.panel._dispatch({"action": "app.bind", "id": "aa000001", "profile_id": "de000001", "backup_profile_id": "ab000002"}, Mock())
         self.panel.runner.bind.assert_called_once_with("aa000001", "de000001", backup_profile_name="ab000002")
+        self.panel.runner.test.return_value = {'exit_ip': '192.0.2.80', 'pid': 200}
+        self.panel._dispatch({'action': 'app.test', 'id': 'aa000001'}, Mock())
+        self.panel.runner.test.assert_called_once_with('aa000001')
+        self.assertEqual(self.panel.app_tests['aa000001']['pid'], 200)
         self.panel.manager = Mock()
         self.panel._dispatch({"action": "profile.import", "source": "socks5://127.0.0.1:1080", "name": "test"}, Mock())
         self.panel.manager.import_profile.assert_called_once_with("socks5://127.0.0.1:1080", name="test", replace_id=None)

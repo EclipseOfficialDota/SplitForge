@@ -79,6 +79,10 @@ class Runner:
     def running(self, app: AppBinding) -> bool:
         return run(["systemctl", "is-active", "--quiet", self.unit(app)], check=False).returncode == 0
 
+    def test(self, app_id: str) -> dict:
+        from splitforge.core.probe import test_application
+        return test_application(self, app_id)
+
     def bind(self, app_id: str, profile_name: str | None, *, start: bool = True,
              backup_profile_name: str | None = None, preserve_failover: bool = False, expected: AppBinding | None = None):
         require_root()

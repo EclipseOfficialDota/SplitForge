@@ -58,6 +58,17 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       .click();
     await page.locator("#search").fill("telegram");
     assert.equal(await page.locator("#main-content tbody tr").count(), 1);
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Test route", exact: true })
+        .isEnabled(),
+      true,
+    );
+    await page.getByRole("button", { name: "Test route", exact: true }).click();
+    await page
+      .locator("#toast")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
     await page.locator(".route-pill").click();
     await page
       .getByRole("heading", { name: "Assign route · telegram_bot.py" })
@@ -173,6 +184,16 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
           },
         ],
       };
+      body.app_tests = {
+        aa000001: {
+          exit_ip: "192.0.2.80",
+          dns_servers: ["127.0.0.53"],
+          checked_at: Date.now() / 1000,
+          pid: 321,
+          profile_id: "de000001",
+          latency_ms: 42,
+        },
+      };
       body.jobs = [
         {
           id: "download-fixture",
@@ -196,6 +217,9 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
         .getAttribute("value"),
       "42",
     );
+    await page.locator('[data-page="router"]').first().click();
+    await page.getByText("IP 192.0.2.80", { exact: false }).waitFor();
+    assert.match(await page.locator("#main-content").innerText(), /PID 321/);
     await page.unroute("**/api/state");
     await page
       .getByRole("button", { name: "Quick start", exact: false })

@@ -18,6 +18,13 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.5.1: targeted real Linux failover/probe tests (2 methods), authenticated
+web unit checks (10 methods), and desktop/mobile browser checks passed. The real
+probe confirms PID, network/mount namespace identity, isolated resolver and
+fixture egress after failover; it rejects an intentionally mismatched saved
+assignment and a stopped workload. Browser checks cover the button, demo guard
+and historical result rendering. Version 2.5.0's full 90-test CI run also passed.
+
 Version 2.5.0: **90 tests passed with root integration enabled** (88.028
 seconds), plus the desktop/mobile browser suite, CI-policy lint, package build
 and documentation checks. Real systemd tests verify the persistent monitor,

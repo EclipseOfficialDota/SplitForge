@@ -61,6 +61,7 @@ class Panel:
         self.route_baseline = None if demo else self._host_routes()
         self.worker = None
         self.diagnostics = None
+        self.app_tests = {}
 
     @staticmethod
     def _host_routes():
@@ -76,6 +77,7 @@ class Panel:
             result["jobs"] = [dict(job, messages=list(job["messages"])) for job in self.jobs]
             result["busy"] = self.busy
             result["diagnostics"] = self.diagnostics
+            result['app_tests'] = dict(self.app_tests)
         return result
 
     def _snapshot(self):
@@ -118,7 +120,7 @@ class Panel:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
                 "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
-                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "cores.install", "diagnostics.run"}:
+                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run"}:
             raise ValueError("Unknown action")
         with self.lock:
             if self.busy:
@@ -173,6 +175,11 @@ class Panel:
             with self.lock:
                 self.diagnostics = result
             report(f'Checks completed: {result["errors"]} errors, {result["warnings"]} warnings')
+        elif action == 'app.test':
+            result = self.runner.test(target)
+            with self.lock:
+                self.app_tests[target] = result
+            report(json.dumps(result))
         elif action == "profile.import":
             profile = self.manager.import_profile(self._text(data, "source"),
                 name=self._text(data, "name", limit=80) or None, replace_id=target or None)

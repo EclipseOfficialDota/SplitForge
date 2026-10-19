@@ -1,4 +1,5 @@
 """Real failover namespaces, root workload identity and persistent monitor service."""
+import dataclasses
 import json
 import os
 import shutil
@@ -89,6 +90,19 @@ class FailoverLinuxTests(unittest.TestCase):
                     self.assertEqual(Path(f'/proc/{pid}/ns/net').stat().st_ino,
                                      Path('/run/netns', profiles[1].namespace).stat().st_ino)
                     self.assertEqual(manager.test(profiles[1].id)['exit_ip'], '192.0.2.80')
+                    probe = runner.test(app.id)
+                    self.assertEqual(probe['exit_ip'], '192.0.2.80')
+                    self.assertEqual(probe['pid'], int(pid))
+                    self.assertEqual(probe['dns_servers'], ['127.0.0.53'])
+                    self.assertEqual(probe['network_namespace'], Path(f'/proc/{pid}/ns/net').stat().st_ino)
+                    self.assertEqual(probe['mount_namespace'], Path(f'/proc/{pid}/ns/mnt').stat().st_ino)
+                    self.assertTrue(probe['resolved_addresses'])
+                    store.save_app(dataclasses.replace(assigned, profile_id=profiles[0].id))
+                    try:
+                        with self.assertRaisesRegex(ValueError, 'Actual application namespace'):
+                            runner.test(app.id)
+                    finally:
+                        store.save_app(assigned)
                     for server in servers:
                         server.terminate()
                         server.wait(timeout=10)
@@ -99,6 +113,8 @@ class FailoverLinuxTests(unittest.TestCase):
                     self.assertTrue(blocked.enabled)
                     self.assertEqual(blocked.profile_id, profiles[1].id)
                     self.assertFalse(runner.running(blocked))
+                    with self.assertRaisesRegex(ValueError, 'Start the application'):
+                        runner.test(app.id)
                     self.assertEqual(run(['systemctl', 'show', runner.unit(app), '-p', 'MainPID', '--value']).stdout.strip(), '0')
                     self.assertEqual(run(['ip', '-j', '-4', 'route', 'show', 'table', 'main']).stdout, baseline)
                 finally:

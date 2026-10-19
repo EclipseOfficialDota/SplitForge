@@ -149,7 +149,12 @@ function appTable(apps, actions = true) {
       "Register a script, executable or existing systemd service.",
       button("＋ Register app", "add-app", "", "primary"),
     );
-  return `<div class="table-wrap"><table><thead><tr><th>APPLICATION / SCRIPT</th><th>ASSIGNED ROUTE</th><th>USER</th><th>STATE</th>${actions ? "<th>CONTROLS</th>" : ""}</tr></thead><tbody>${apps.map((app) => `<tr><td>${appIdentity(app)}</td><td>${route(app)}</td><td class="mono muted">${e(app.user)}</td><td>${badge(app.running, "RUNNING")}</td>${actions ? `<td><div class="row-actions">${button(app.running ? "Stop" : "Start", "app-toggle", app.id, "", state.busy)}${button("Remove", "app-remove", app.id, "danger", state.busy)}</div></td>` : ""}</tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>APPLICATION / SCRIPT</th><th>ASSIGNED ROUTE</th><th>USER</th><th>STATE</th>${actions ? "<th>CONTROLS</th>" : ""}</tr></thead><tbody>${apps.map((app) => `<tr><td>${appIdentity(app)}${appProbe(app)}</td><td>${route(app)}</td><td class="mono muted">${e(app.user)}</td><td>${badge(app.running, "RUNNING")}</td>${actions ? `<td><div class="row-actions">${button(app.running ? "Stop" : "Start", "app-toggle", app.id, "", state.busy)}${button("Test route", "app.test", app.id, "", state.busy || !app.running)}${button("Remove", "app-remove", app.id, "danger", state.busy)}</div></td>` : ""}</tr>`).join("")}</tbody></table></div>`;
+}
+function appProbe(app) {
+  const result = state.app_tests?.[app.id];
+  if (!result) return "";
+  return `<div class="field-hint mono">Last process-route test: ${e(new Date(result.checked_at * 1000).toLocaleString())}<br>IP ${e(result.exit_ip)} · DNS ${e(result.dns_servers.join(", "))}<br>HTTPS connected · PID ${e(result.pid)} · ${e(Math.round(result.latency_ms))} ms<br>Route at test: ${e(profileName(result.profile_id))}</div>`;
 }
 function routerPage() {
   return (
@@ -549,7 +554,7 @@ document.addEventListener("click", async (event) => {
       await sendAction(
         app.running ? { action: "app.stop", id } : { action: "app.start", id },
       );
-    } else if (["profile.start", "profile.test"].includes(action))
+    } else if (["profile.start", "profile.test", "app.test"].includes(action))
       await sendAction({ action, id });
     else if (action === "diagnostics-check")
       await sendAction({ action: "diagnostics.run", repair: false });

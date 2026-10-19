@@ -208,6 +208,13 @@ def app_stop(ctx: typer.Context, target: str):
     runner.stop(app_by_name(store, target).id)
 
 
+@apps.command("test")
+def app_test(ctx: typer.Context, target: str):
+    """Check IP, DNS and HTTPS in the actual running application namespaces."""
+    store, _, runner = objects(ctx)
+    typer.echo(json.dumps(runner.test(app_by_name(store, target).id), indent=2))
+
+
 @apps.command("remove")
 def app_remove(ctx: typer.Context, target: str):
     store, _, runner = objects(ctx)

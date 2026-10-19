@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.5.1 — 2026-10-19
+
+- App Router's **Test route** and `splitforge app test NAME` check HTTPS egress,
+  resolved addresses and DNS configuration in the running main process's pinned
+  network **and mount** namespaces, with its UID and capabilities removed.
+- Reject stopped/restarted workloads, mismatched assignments and unsupported
+  chroot services; never substitute a profile-only or host probe. Results show
+  their PID, route and measurement time and are retained only in panel memory.
+
 ## 2.5.0 — 2026-10-19
 
 - Per-application primary/backup tunnel policy in App Router and `bind --backup`.
