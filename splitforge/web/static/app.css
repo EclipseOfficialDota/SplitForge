@@ -1485,3 +1485,112 @@ body:has(dialog[open]) {
     scroll-behavior: auto !important;
   }
 }
+
+#language-button {
+  position: absolute;
+  right: 16px;
+  font-family: system-ui, sans-serif;
+}
+.window-hint {
+  right: 95px;
+}
+html[lang="fa"] body {
+  font-family: Tahoma, system-ui, sans-serif;
+}
+html[lang="fa"] .nav-item,
+html[lang="fa"] .button,
+html[lang="fa"] .text-button,
+html[lang="fa"] .metric-value,
+html[lang="fa"] .metric-label,
+html[lang="fa"] .metric-note,
+html[lang="fa"] .panel-foot,
+html[lang="fa"] .badge,
+html[lang="fa"] .meta,
+html[lang="fa"] .statusbar,
+html[lang="fa"] .field-hint,
+html[lang="fa"] .notice,
+html[lang="fa"] .eyebrow,
+html[lang="fa"] .nav-caption,
+html[lang="fa"] .machine-card,
+html[lang="fa"] .session-button {
+  font-family: Tahoma, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+html[lang="fa"] .nav-item {
+  font-size: 13px;
+}
+html[lang="fa"] .metric-label,
+html[lang="fa"] .metric-note,
+html[lang="fa"] .panel-foot,
+html[lang="fa"] .field-hint,
+html[lang="fa"] .meta,
+html[lang="fa"] .notice {
+  font-size: 11px;
+  line-height: 1.9;
+}
+html[lang="fa"] .badge {
+  font-size: 10px;
+}
+html[dir="rtl"] .sidebar {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+html[dir="rtl"] .nav-item kbd {
+  margin-left: 0;
+  margin-right: auto;
+}
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] .file-entry {
+  text-align: right;
+}
+html[dir="rtl"] .eyebrow,
+html[dir="rtl"] .nav-caption,
+html[dir="rtl"] .metric-label {
+  letter-spacing: 0;
+}
+html[dir="rtl"] .mono,
+html[dir="rtl"] code,
+html[dir="rtl"] pre,
+html[dir="rtl"] .prompt,
+html[dir="rtl"] input[type="url"],
+html[dir="rtl"] input[type="password"],
+html[dir="rtl"] #field-command,
+html[dir="rtl"] #field-cwd,
+html[dir="rtl"] #browse-path,
+html[dir="rtl"] #field-source,
+html[dir="rtl"] #field-resolver,
+html[dir="rtl"] #field-domain,
+html[dir="rtl"] #field-public_key,
+html[dir="rtl"] #field-certificate,
+html[dir="rtl"] #dns-bootstrap {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+html[dir="rtl"] .log-output {
+  text-align: left;
+}
+html[dir="rtl"] .toast {
+  right: auto;
+  left: 35px;
+}
+@media (max-width: 760px) {
+  #language-button {
+    right: 12px;
+    font-size: 11px;
+  }
+  .window-title {
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  html[dir="rtl"] .sidebar {
+    left: auto;
+    right: 0;
+  }
+  html[dir="rtl"] .toast {
+    left: 15px;
+    right: 15px;
+  }
+}

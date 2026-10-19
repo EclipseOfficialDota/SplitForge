@@ -255,6 +255,22 @@ in memory; restarting the panel clears them. Profile/app state remains on disk.
 
 ## Custom options
 
+### English / فارسی
+
+Use the language button in the title bar before or after login. Open dialogs have
+their own button because native modal dialogs block controls behind them. The
+choice applies to every page, form, navigation label, help lesson, diagnostic
+finding/remedy, progress summary and error guidance. Persian uses RTL; commands,
+IP addresses and technical output retain LTR where needed. Only the language
+preference is stored in browser local storage. Switching preserves current form
+values and does not change server configuration.
+
+Raw systemd journals, upstream technical errors, paths, core names, commands and
+user-provided names retain their original spelling. Operation cards offer
+expandable **Technical details** underneath localized status/error guidance.
+Unrecognized upstream failures receive localized guidance by error category;
+their original details are retained for troubleshooting.
+
 ### Verify an application's actual route
 
 In **App router**, start the workload and click **Test route**. The check pins

@@ -346,7 +346,7 @@ class Handler(BaseHTTPRequestHandler):
             self._origin()
             url = urlsplit(self.path)
             files = {"/": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
-                     "/app.js": ("app.js", "text/javascript")}
+                     "/app.js": ("app.js", "text/javascript"), "/i18n.js": ("i18n.js", "text/javascript")}
             if url.path in files:
                 filename, mime = files[url.path]
                 self._send(200, (STATIC / filename).read_bytes(), mime)

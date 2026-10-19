@@ -226,6 +226,60 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       .click();
     await page.getByRole("button", { name: "فارسی", exact: true }).click();
     assert.equal(await page.locator(".help-steps").getAttribute("dir"), "rtl");
+    assert.equal(await page.locator("html").getAttribute("lang"), "fa");
+    await page.locator('[data-page="router"]').first().click();
+    await page
+      .getByRole("button", { name: "ثبت برنامه", exact: false })
+      .click();
+    await page.locator("#field-name").fill("language-draft");
+    await page.locator("#modal-language-button").click();
+    assert.equal(
+      await page.locator("#field-name").inputValue(),
+      "language-draft",
+    );
+    await page
+      .getByRole("heading", { name: "Register a workload", exact: true })
+      .waitFor();
+    await page.locator("#modal-language-button").click();
+    await page
+      .getByRole("heading", { name: "ثبت برنامه", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "ثبت برنامه", exact: true })
+      .last()
+      .click();
+    await page
+      .locator("#form-error")
+      .filter({ hasText: "دموی فقط‌خواندنی" })
+      .waitFor();
+    await page.locator("#modal-close").click();
+    for (const [name, heading] of [
+      ["overview", "برنامه‌های شما."],
+      ["profiles", "پروفایل‌های"],
+      ["security", "امنیت"],
+      ["cores", "ابزارهای"],
+      ["logs", "گزارش"],
+      ["help", "راهنمای"],
+    ]) {
+      await page.locator(`[data-page="${name}"]`).first().click();
+      assert.match(
+        await page.locator("#main-content h1").innerText(),
+        new RegExp(heading),
+      );
+    }
+    await page.reload();
+    await page.locator("#main-content h1").waitFor();
+    assert.equal(await page.locator("html").getAttribute("dir"), "rtl");
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      true,
+      "No RTL mobile overflow",
+    );
+    await page.locator("#language-button").click();
+    await page.setViewportSize({ width: 1440, height: 1050 });
     await page.route("**/api/state", async (route) => {
       const response = await route.fetch();
       const body = await response.json();

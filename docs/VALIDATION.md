@@ -18,6 +18,12 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.6.0: the expanded real browser suite passed all seven Persian pages,
+global and modal language switches, preserved dialog drafts, translated demo
+errors, persisted preference after reload, reversible English navigation and
+390px RTL overflow checks. A separate visible-label audit covered all pages and
+app/profile/route forms. Raw journals/user names are intentionally excluded.
+
 Version 2.5.1: targeted real Linux failover/probe tests (2 methods), authenticated
 web unit checks (10 methods), and desktop/mobile browser checks passed. The real
 probe confirms PID, network/mount namespace identity, isolated resolver and

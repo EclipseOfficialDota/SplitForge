@@ -24,7 +24,7 @@ let state = null,
   page = "overview",
   timer,
   search = "",
-  helpLanguage = "en",
+  helpLanguage = window.SplitForgeLocale.language,
   fileDraft = {},
   fileMode = "app";
 let seenJobs = new Map(),
@@ -83,7 +83,7 @@ function profileName(id) {
   return state.profiles.find((p) => p.id === id)?.name || "Direct server";
 }
 function route(app, interactive = true) {
-  const label = `<span>${app.profile_id ? "↗" : "◌"}</span>${e(profileName(app.profile_id))}${interactive ? "<span>⌄</span>" : ""}`;
+  const label = `<span>${app.profile_id ? "↗" : "◌"}</span>${app.profile_id ? `<span data-no-translate>${e(profileName(app.profile_id))}</span>` : e(profileName(app.profile_id))}${interactive ? "<span>⌄</span>" : ""}`;
   const current = interactive
     ? `<button type="button" class="route-pill ${app.profile_id ? "" : "direct"}" data-action="route" data-id="${e(app.id)}">${label}</button>`
     : `<span class="route-pill ${app.profile_id ? "" : "direct"}">${label}</span>`;
@@ -110,7 +110,7 @@ function operations() {
     .slice(0, 6)
     .map(
       (job) =>
-        `<div class="operation ${e(job.state)}"><strong>${e(job.action)} · ${e(job.state.toUpperCase())}</strong>${job.progress ? `<progress class="download-progress" max="100" ${Number.isFinite(job.progress.percent) ? `value="${Math.max(0, Math.min(100, job.progress.percent))}"` : ""} aria-label="Download progress"></progress>` : ""}<p>${e(job.error || job.messages.slice(-3).join("\n") || "Working…")}</p></div>`,
+        `<div class="operation ${e(job.state)}"><strong>${e(job.action)} · ${e(job.state.toUpperCase())}</strong>${job.progress ? `<progress class="download-progress" max="100" ${Number.isFinite(job.progress.percent) ? `value="${Math.max(0, Math.min(100, job.progress.percent))}"` : ""} aria-label="Download progress"></progress>` : ""}<p>${e(job.error || job.progress?.phase || (job.state === "success" ? "Operation completed." : "Working…"))}</p><details><summary>Technical details</summary><pre>${e([job.error, ...job.messages].filter(Boolean).join("\n"))}</pre></details></div>`,
     )
     .join("")}</div>`;
 }
@@ -345,7 +345,7 @@ function renderStatus() {
   $("#job-banner").hidden = !running;
   if (running)
     $("#job-banner").textContent =
-      `◌ ${running.action} · ${running.messages.at(-1) || "Working…"}`;
+      `◌ ${running.action} · ${running.progress?.phase || "Working…"}`;
 }
 async function poll() {
   clearTimeout(timer);
@@ -567,8 +567,7 @@ document.addEventListener("click", async (event) => {
       if ($("#follow-logs")) $("#follow-logs").checked = true;
       await loadLogs();
     } else if (action.startsWith("help-")) {
-      helpLanguage = action.slice(5);
-      renderMain();
+      window.SplitForgeLocale.set(action.slice(5));
     } else if (action === "browse-app" || action === "browse-profile") {
       fileDraft = draftForm();
       fileMode = action === "browse-app" ? "app" : "profile";
@@ -758,4 +757,8 @@ async function boot() {
     $("#login-error").textContent = error.message;
   }
 }
+document.addEventListener("splitforge-language", (event) => {
+  helpLanguage = event.detail;
+  if (page === "help" && state) renderMain();
+});
 boot();

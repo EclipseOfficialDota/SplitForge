@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.6.0 — 2026-10-19
+
+- Global English/Persian switch on the login page, panel and open dialogs;
+  persistent browser preference, RTL layout, translated pages/forms/accessibility
+  labels, status/progress, diagnostic findings/remedies and error guidance.
+- Language changes retain in-progress form data and routes. Technical commands,
+  user-defined names and raw journals remain original; operation details are
+  separately expandable beneath translated summaries.
+- Browser regression covers all seven Persian pages, errors, language persistence,
+  open-dialog drafts, bidirectional switching and a 390px RTL viewport.
+
 ## 2.5.1 — 2026-10-19
 
 - App Router's **Test route** and `splitforge app test NAME` check HTTPS egress,
