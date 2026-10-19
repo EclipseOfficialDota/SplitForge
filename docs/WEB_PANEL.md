@@ -271,6 +271,14 @@ expandable **Technical details** underneath localized status/error guidance.
 Unrecognized upstream failures receive localized guidance by error category;
 their original details are retained for troubleshooting.
 
+### Encrypted backup and recovery
+
+**Security & DNS** includes encrypted export/download and file restore forms.
+Restore replaces current registrations, retains panel access and leaves imported
+workloads stopped. CLI commands also offer explicit startup, web redeployment
+and previous-version rollback. Read [Backups and rollback](BACKUPS.md) for the
+archive contents, password handling, recovery behavior and maintenance limits.
+
 ### Verify an application's actual route
 
 In **App router**, start the workload and click **Test route**. The check pins

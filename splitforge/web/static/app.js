@@ -112,6 +112,20 @@ function operations() {
       (job) =>
         `<div class="operation ${e(job.state)}"><strong>${e(job.action)} · ${e(job.state.toUpperCase())}</strong>${job.progress ? `<progress class="download-progress" max="100" ${Number.isFinite(job.progress.percent) ? `value="${Math.max(0, Math.min(100, job.progress.percent))}"` : ""} aria-label="Download progress"></progress>` : ""}<p>${e(job.error || job.progress?.phase || (job.state === "success" ? "Operation completed." : "Working…"))}</p><details><summary>Technical details</summary><pre>${e([job.error, ...job.messages].filter(Boolean).join("\n"))}</pre></details></div>`,
     )
+    .join("")}${state.jobs
+    .filter(
+      (job) =>
+        job.action === "backup.export" &&
+        job.result?.download &&
+        job.state === "success",
+    )
+    .map((job) =>
+      button(
+        "Download encrypted backup",
+        "backup-download",
+        job.result.download,
+      ),
+    )
     .join("")}</div>`;
 }
 
@@ -200,8 +214,12 @@ function securityPage() {
       "WORKSPACE / GUARDS",
     ) +
     `<div class="two-column"><section class="panel"><div class="panel-header"><h2><span>◇</span> Namespace policy</h2><span class="badge">ENFORCED</span></div><ul class="guard-list"><li><span>✓</span><div><strong>Kill switch enabled</strong><p>Managed tunnel namespaces deny fallback through the host underlay.</p></div></li><li><span>✓</span><div><strong>Verified DNS-over-HTTPS</strong><p>A local stub forwards resolver requests through the assigned tunnel.</p></div></li><li><span>✓</span><div><strong>IPv6 disabled in managed namespaces</strong><p>This release uses an IPv4 data plane.</p></div></li><li><span>✓</span><div><strong>Shared profile, shared guard</strong><p>Apps in one namespace cannot disable its protection independently.</p></div></li></ul></section>
-    <section class="panel"><div class="panel-header"><h2><span>↗</span> Encrypted DNS settings</h2></div><form id="dns-form" class="form-panel stack"><div><label for="dns-profile">Profile</label><select id="dns-profile" name="id" required>${profileOptions()}</select></div><div><label for="dns-url">DNS-over-HTTPS URL</label><input id="dns-url" name="url" type="url" value="https://cloudflare-dns.com/dns-query" required></div><div><label for="dns-bootstrap">Bootstrap IPv4</label><input id="dns-bootstrap" name="bootstrap" value="1.1.1.1" required><p class="field-hint">Must serve this hostname with a valid TLS certificate.</p></div><div class="notice">Stop the profile before editing DNS. Dependent workloads may stop with it.</div><button class="button primary" type="submit">Save encrypted DNS</button></form></section></div>`
+    <section class="panel"><div class="panel-header"><h2><span>↗</span> Encrypted DNS settings</h2></div><form id="dns-form" class="form-panel stack"><div><label for="dns-profile">Profile</label><select id="dns-profile" name="id" required>${profileOptions()}</select></div><div><label for="dns-url">DNS-over-HTTPS URL</label><input id="dns-url" name="url" type="url" value="https://cloudflare-dns.com/dns-query" required></div><div><label for="dns-bootstrap">Bootstrap IPv4</label><input id="dns-bootstrap" name="bootstrap" value="1.1.1.1" required><p class="field-hint">Must serve this hostname with a valid TLS certificate.</p></div><div class="notice">Stop the profile before editing DNS. Dependent workloads may stop with it.</div><button class="button primary" type="submit">Save encrypted DNS</button></form></section></div>` +
+    backupPanel()
   );
+}
+function backupPanel() {
+  return `<section class="panel"><div class="panel-header"><h2>Encrypted backup & recovery</h2></div><div class="form-panel two-column"><form id="backup-export-form" class="stack"><h3>Export configuration</h3><p>Includes profiles, app routes, DNS, failover and web settings. Keep your password separately; it cannot be recovered.</p><label for="backup-password">Backup password (12+ characters)</label><input id="backup-password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required><label for="backup-confirm">Confirm password</label><input id="backup-confirm" name="confirmation" type="password" minlength="12" maxlength="1024" autocomplete="new-password" required><button class="button primary" type="submit">Create encrypted backup</button></form><form id="backup-restore-form" class="stack"><h3>Restore configuration</h3><p>Replaces current registrations and stops workloads. Imported commands remain stopped. Current web access is retained; use the CLI to apply saved web settings or restart trusted workloads.</p><label for="backup-file">Encrypted .sfb file</label><input id="backup-file" name="archive" type="file" accept=".sfb" required><label for="restore-password">Backup password</label><input id="restore-password" name="password" type="password" autocomplete="current-password" required><label class="check-inline"><input type="checkbox" name="confirm" required> I trust this backup and accept replacement of current registrations</label><button class="button danger" type="submit">Restore and keep workloads stopped</button></form></div><div class="panel-foot">Version rollback: splitforge rollback --list / splitforge rollback --backup ID. Updates retain a private installation snapshot on the server.</div></section>${operations()}`;
 }
 function coresPage() {
   return (
@@ -523,7 +541,21 @@ document.addEventListener("click", async (event) => {
     id = target.dataset.id;
   try {
     if (action === "add-app") addApp();
-    else if (action === "add-profile") addProfile();
+    else if (action === "backup-download") {
+      const response = await fetch(`/api/backup?id=${encodeURIComponent(id)}`, {
+        credentials: "same-origin",
+      });
+      if (!response.ok)
+        throw new Error(
+          (await response.json()).error || "Backup download failed",
+        );
+      const url = URL.createObjectURL(await response.blob()),
+        anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "splitforge-backup.sfb";
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else if (action === "add-profile") addProfile();
     else if (action === "profile-edit")
       addProfile(state.profiles.find((p) => p.id === id));
     else if (action === "route") routeModal(id);
@@ -606,6 +638,8 @@ document.addEventListener("submit", async (event) => {
       "cores-form",
       "browse-form",
       "diagnostics-repair-form",
+      "backup-export-form",
+      "backup-restore-form",
     ].includes(formId)
   )
     return;
@@ -614,6 +648,26 @@ document.addEventListener("submit", async (event) => {
   if (submit) submit.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (formId === "backup-export-form") {
+      if (data.password !== data.confirmation)
+        throw new Error("Backup passwords do not match");
+      await sendAction({ action: "backup.export", password: data.password });
+      form.reset();
+      return;
+    }
+    if (formId === "backup-restore-form") {
+      const file = form.elements.archive.files[0];
+      if (!file || file.size > 16 * 1024 * 1024)
+        throw new Error("Backup file must be smaller than 16 MiB");
+      await sendAction({
+        action: "backup.restore",
+        archive: await file.text(),
+        password: data.password,
+        confirm: data.confirm === "on",
+      });
+      form.reset();
+      return;
+    }
     if (formId === "browse-form") {
       await browse(data.path);
       return;

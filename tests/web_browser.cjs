@@ -143,6 +143,14 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       "https://dns.example.com/dns-query",
       "Polling must not erase edits",
     );
+    await page.locator('#backup-password').fill('browser-test-backup-password');
+    await page.locator('#backup-confirm').fill('different-test-password');
+    await page.getByRole('button',{name:'Create encrypted backup',exact:true}).click();
+    await page.locator('#toast').filter({hasText:'Backup passwords do not match'}).waitFor();
+    await page.locator('#backup-confirm').fill('browser-test-backup-password');
+    await page.getByRole('button',{name:'Create encrypted backup',exact:true}).click();
+    await page.locator('#toast').filter({hasText:'Read-only demo'}).waitFor();
+    assert.equal(new URL(page.url()).search,'','Backup passwords never appear in the URL');
     await page.getByRole("button", { name: "Live logs", exact: false }).click();
     await page
       .locator("#journal-output")

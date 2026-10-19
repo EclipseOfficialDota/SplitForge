@@ -83,6 +83,23 @@ class Runner:
         from splitforge.core.probe import test_application
         return test_application(self, app_id)
 
+    def restore(self, enabled_profiles=()):
+        require_root()
+        bindings = self.store.apps()
+        automatic = set().union(*(binding.profile_references for binding in bindings if binding.failover_enabled))
+        needed = {binding.profile_id for binding in bindings if binding.enabled and not binding.failover_enabled and binding.profile_id}
+        needed |= set(self.store.snapshot()['users'].values()) | (set(enabled_profiles) - automatic)
+        for profile_id in needed:
+            self.manager.start(profile_id)
+        for user, profile_id in self.store.snapshot()['users'].items():
+            self.bind_user(user, profile_id)
+        for binding in bindings:
+            if binding.enabled:
+                self.bind(binding.id, binding.profile_id, preserve_failover=True, expected=binding)
+        if any(binding.failover_enabled for binding in bindings):
+            from splitforge.core.failover import ensure_service
+            ensure_service(self.store)
+
     def bind(self, app_id: str, profile_name: str | None, *, start: bool = True,
              backup_profile_name: str | None = None, preserve_failover: bool = False, expected: AppBinding | None = None):
         require_root()
@@ -183,6 +200,7 @@ class Runner:
         require_root()
         with self.store.operation(app_id):
             app = self.store.app(app_id)
+            self._validate_service(app)
             managed = self._path(app).exists()
             if managed or app.service:
                 run(["systemctl", "stop", self.unit(app)])

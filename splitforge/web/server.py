@@ -62,6 +62,7 @@ class Panel:
         self.worker = None
         self.diagnostics = None
         self.app_tests = {}
+        self.exports = {}
 
     @staticmethod
     def _host_routes():
@@ -120,7 +121,7 @@ class Panel:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
                 "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
-                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run"}:
+                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run", "backup.export", "backup.restore"}:
             raise ValueError("Unknown action")
         with self.lock:
             if self.busy:
@@ -135,9 +136,11 @@ class Panel:
 
     def _work(self, job, data):
         try:
-            self._dispatch(data, lambda message: self._message(job, message))
+            result = self._dispatch(data, lambda message: self._message(job, message))
             with self.lock:
                 job["state"] = "success"
+                if result is not None:
+                    job['result'] = result
         except Exception as error:
             with self.lock:
                 job["state"], job["error"] = "failed", str(error)[:1000]
@@ -165,6 +168,27 @@ class Panel:
     def _dispatch(self, data, report):
         action = data["action"]
         target = self._text(data, "id", limit=80)
+        if action in {'backup.export', 'backup.restore'}:
+            from splitforge.core.backup import LIMIT, capture, decrypt, encrypt, restore_backup
+            password = data.get('password')
+            if not isinstance(password, str) or not 12 <= len(password.encode()) <= 1024:
+                raise ValueError('Backup password must contain 12–1024 UTF-8 bytes')
+            if action == 'backup.export':
+                report('Encrypting configuration backup…')
+                archive = encrypt(capture(self.store), password)
+                identifier = secrets.token_hex(16)
+                with self.lock:
+                    self.exports[identifier] = archive
+                    while len(self.exports) > 6:
+                        self.exports.pop(next(iter(self.exports)))
+                return {'download': identifier}
+            if data.get('confirm') is not True:
+                raise ValueError('Confirm replacement of current registrations before restoring')
+            document = decrypt(self._text(data, 'archive', limit=LIMIT * 2), password)
+            restore_backup(self.store, self.manager, self.runner, document, password, start=False, report=report)
+            with self.lock:
+                self.app_tests.clear()
+            return
         if action == "diagnostics.run":
             repair = data.get('repair', False)
             if not isinstance(repair, bool):
@@ -365,6 +389,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"text": self.server.panel.logs()})
             elif url.path == "/api/browse":
                 self._send(200, self.server.panel.browse(parse_qs(url.query).get("path", ["/"])[0]))
+            elif url.path == '/api/backup':
+                identifier = parse_qs(url.query).get('id', [''])[0]
+                with self.server.panel.lock:
+                    archive = self.server.panel.exports.get(identifier)
+                if archive is None:
+                    self._send(404, {'error': 'Backup download expired; export a new backup'})
+                else:
+                    self._send(200, archive.encode('ascii'), 'application/octet-stream')
             else:
                 self._send(404, {"error": "Not found"})
         except (ValueError, KeyError) as error:
@@ -380,8 +412,11 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get_content_type() != "application/json" or self.headers.get("Transfer-Encoding"):
                 raise ValueError("Use an application/json request")
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 65536:
-                self._send(413, {"error": "Request exceeds 64 KiB or is empty"})
+            _, upload_session = self._session()
+            upload = (urlsplit(self.path).path == '/api/action' and not self.server.panel.demo and upload_session is not None
+                      and hmac.compare_digest(self.headers.get('X-SplitForge-CSRF', ''), upload_session['csrf']))
+            if not 0 < length <= (16 * 1024 * 1024 if upload else 65536):
+                self._send(413, {"error": "Request is empty or exceeds its allowed size"})
                 return
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):

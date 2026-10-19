@@ -345,6 +345,36 @@
     routing: "مسیریابی",
   };
   Object.assign(fa, {
+    'Request is empty or exceeds its allowed size': 'درخواست خالی یا بزرگ‌تر از حجم مجاز است',
+    "Encrypted backup & recovery": "پشتیبان رمزگذاری‌شده و بازیابی",
+    "Export configuration": "خروجی گرفتن از تنظیمات",
+    "Includes profiles, app routes, DNS, failover and web settings. Keep your password separately; it cannot be recovered.":
+      "شامل پروفایل‌ها، مسیر برنامه‌ها، DNS، پشتیبان خودکار و تنظیمات وب است. رمز را جداگانه نگه دارید؛ قابل بازیابی نیست.",
+    "Backup password (12+ characters)": "رمز پشتیبان (حداقل ۱۲ نویسه)",
+    "Confirm password": "تکرار رمز",
+    "Create encrypted backup": "ساخت پشتیبان رمزگذاری‌شده",
+    "Restore configuration": "بازیابی تنظیمات",
+    "Replaces current registrations and stops workloads. Imported commands remain stopped. Current web access is retained; use the CLI to apply saved web settings or restart trusted workloads.":
+      "ثبت‌های فعلی جایگزین و برنامه‌ها متوقف می‌شوند. فرمان‌های واردشده اجرا نمی‌شوند. دسترسی فعلی وب حفظ می‌شود؛ برای اعمال تنظیمات وب ذخیره‌شده یا اجرای برنامه‌های معتبر از خط فرمان استفاده کنید.",
+    "Encrypted .sfb file": "فایل رمزگذاری‌شدهٔ .sfb",
+    "Backup password": "رمز پشتیبان",
+    "I trust this backup and accept replacement of current registrations":
+      "به این پشتیبان اعتماد دارم و جایگزینی ثبت‌های فعلی را می‌پذیرم",
+    "Restore and keep workloads stopped": "بازیابی با حفظ توقف برنامه‌ها",
+    "Version rollback: splitforge rollback --list / splitforge rollback --backup ID. Updates retain a private installation snapshot on the server.":
+      "بازگشت نسخه: splitforge rollback --list / splitforge rollback --backup ID. قبل از به‌روزرسانی، نسخهٔ خصوصی نصب روی سرور نگه‌داری می‌شود.",
+    "Download encrypted backup": "دانلود پشتیبان رمزگذاری‌شده",
+    "Backup passwords do not match": "رمز و تکرار آن یکسان نیستند",
+    "Backup file must be smaller than 16 MiB":
+      "حجم فایل پشتیبان باید کمتر از ۱۶ مِبی‌بایت باشد",
+    "Backup download expired; export a new backup":
+      "مهلت دریافت پشتیبان تمام شده است؛ خروجی جدید بسازید",
+    "Incorrect backup password or damaged backup; nothing was restored":
+      "رمز اشتباه است یا فایل پشتیبان آسیب دیده؛ چیزی بازیابی نشد",
+    "Backup password must contain 12–1024 UTF-8 bytes":
+      "رمز پشتیبان باید بین ۱۲ تا ۱۰۲۴ بایت UTF-8 باشد",
+    "Confirm replacement of current registrations before restoring":
+      "قبل از بازیابی، جایگزینی ثبت‌های فعلی را تأیید کنید",
     connecting: "در حال برقراری اتصال",
     retry: "تلاش مجدد",
     "verified cache": "فایل معتبر از کش خوانده شد",

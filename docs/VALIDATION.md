@@ -18,6 +18,16 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.7.0: **99 tests passed with root integration enabled** (112.585
+seconds), plus the browser suite, lint and documentation checks. Tests cover
+encrypted round trips, unique ciphertext, tamper/wrong-password rejection,
+private files, invalid references, authenticated HTTP downloads and explicit
+restore confirmation. Real root systemd restoration covers stopped imports and
+failed-start recovery. A separate real installed venv test changes its package
+version and state, then verifies rollback restores both and its root workload.
+Mocked failure tests cover restoration of the current version when old-version
+activation fails. Browser checks cover password confirmation and demo refusal.
+
 Version 2.6.0: the expanded real browser suite passed all seven Persian pages,
 global and modal language switches, preserved dialog drafts, translated demo
 errors, persisted preference after reload, reversible English navigation and

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.7.0 — 2026-10-19
+
+- Password-encrypted, authenticated AES-256-GCM/Scrypt profile/settings backups,
+  public trust-anchor portability and private pre-restore recovery. Web export
+  downloads require authentication; web restores retain access and keep imported
+  workloads stopped. CLI can explicitly restart trusted commands/redeploy web.
+- Pre-update snapshots now retain the complete previous Python environment,
+  matching state and web configuration. `rollback --list` / `rollback --backup ID`
+  restore the environment and state together; failed activation recovers current
+  installation and state. Matching active web services restart after maintenance.
+- Restore handles automatic backup policies without requiring a failed primary
+  to start first. Stop/remove also validates protected adopted services.
+
 ## 2.6.0 — 2026-10-19
 
 - Global English/Persian switch on the login page, panel and open dialogs;

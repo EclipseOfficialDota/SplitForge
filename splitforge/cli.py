@@ -26,12 +26,73 @@ apps = typer.Typer(help="Register scripts, binaries and existing services.")
 deps = typer.Typer(help="Inspect or install protocol dependencies.")
 users = typer.Typer(help="Route future systemd user-manager workloads.")
 web_app = typer.Typer(invoke_without_command=True, help="Set up and run the web control panel.")
+backups = typer.Typer(help="Encrypted profile/settings export and recovery.")
 app.add_typer(profiles, name="profile")
 app.add_typer(apps, name="app")
 app.add_typer(deps, name="dependencies")
 app.add_typer(users, name="user")
 app.add_typer(web_app, name="web")
+app.add_typer(backups, name="backup")
 console = Console()
+
+
+def backup_password(path: Path | None, *, confirm=False):
+    if path is None:
+        return typer.prompt('Backup password (12+ bytes)', hide_input=True, confirmation_prompt=confirm)
+    import stat
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077 or info.st_size > 1025:
+        raise ValueError('Password file must be owned by the current user, mode 0600, and at most 1025 bytes')
+    return path.read_text().rstrip('\n')
+
+
+@backups.command('export')
+def backup_export(ctx: typer.Context, destination: Path,
+                  password_file: Path | None = typer.Option(None, '--password-file')):
+    """Export encrypted state, DNS, failover, web settings and public trust anchors."""
+    require_root()
+    from splitforge.core.backup import export_backup
+    path = export_backup(objects(ctx)[0], destination, backup_password(password_file, confirm=True))
+    typer.echo(f'Encrypted backup saved: {path}')
+
+
+@backups.command('inspect')
+def backup_inspect(source: Path, password_file: Path | None = typer.Option(None, '--password-file')):
+    """Authenticate a backup and show its version/counts without restoring it."""
+    require_root()
+    from splitforge.core.backup import read_backup
+    document = read_backup(source, backup_password(password_file))
+    typer.echo(json.dumps({'version': document.get('version'), 'created': document.get('created'),
+        'profiles': len(document['state']['profiles']), 'apps': len(document['state']['apps']),
+        'web_settings': bool(document.get('web'))}, indent=2))
+
+
+@backups.command('restore')
+def backup_restore(ctx: typer.Context, source: Path,
+                   password_file: Path | None = typer.Option(None, '--password-file'),
+                   start: bool = typer.Option(False, '--start', help='Run enabled commands from this trusted backup.'),
+                   web_settings: bool = typer.Option(False, '--web-settings', help='Also redeploy the saved public web address/ports.'),
+                   agree_tos: bool = typer.Option(False, '--agree-tos'),
+                   yes: bool = typer.Option(False, '--yes')):
+    """Replace current registrations; stop workloads and retain encrypted recovery."""
+    require_root()
+    from splitforge.core.backup import read_backup, restore_backup
+    password = backup_password(password_file)
+    document = read_backup(source, password)
+    if web_settings and (document.get('web') or {}).get('mode') == 'https' and not agree_tos:
+        raise ValueError('HTTPS web restoration requires --agree-tos for certificate issuance')
+    if not yes:
+        typer.confirm(f"Replace configuration with {len(document['state']['profiles'])} profiles and "
+                      f"{len(document['state']['apps'])} apps? Current workloads stop; "
+                      f"saved enabled commands {'will start' if start else 'remain stopped'}.", abort=True)
+    store, manager, runner = objects(ctx)
+    restore_backup(store, manager, runner, document, password, start=start, report=typer.echo)
+    if web_settings and document.get('web'):
+        from splitforge.web.setup import WebSettings, deploy, load_settings
+        current = load_settings()
+        values = dict(document['web'], state=str(store.path.absolute()),
+                      token_file=current.token_file if current else '/etc/splitforge/web.token')
+        deploy(WebSettings(**values), agree_tos=agree_tos, report=typer.echo)
 
 
 def objects(ctx: typer.Context):
@@ -306,6 +367,27 @@ def update(ctx: typer.Context,
     update_installation(ctx.find_root().obj["state"], prefix=prefix, force=force, report=typer.echo)
 
 
+@app.command('rollback')
+def rollback(ctx: typer.Context, prefix: Path | None = typer.Option(None, '--prefix'),
+             backup: str | None = typer.Option(None, '--backup'),
+             list_backups: bool = typer.Option(False, '--list'), yes: bool = typer.Option(False, '--yes')):
+    """Restore a private pre-update environment and its matching saved state."""
+    require_root()
+    from splitforge.core.updater import available_backups, installation_prefix, rollback as revert
+    state = ctx.find_root().obj['state'].expanduser().absolute()
+    prefix = installation_prefix(prefix)
+    choices = available_backups(prefix, state)
+    if list_backups:
+        typer.echo(json.dumps(choices, indent=2))
+        return
+    selected = next((item for item in choices if backup is None or item['id'] == backup), None)
+    if not selected:
+        raise ValueError('No matching installation backup; use splitforge rollback --list')
+    if not yes:
+        typer.confirm(f"Restore installation AND saved state from {selected['id']}? Workloads restart and later configuration changes are replaced.", abort=True)
+    revert(state, prefix=prefix, backup_id=selected['id'], report=typer.echo)
+
+
 @web_app.callback()
 def web(ctx: typer.Context,
         host: str = typer.Option("127.0.0.1", "--host", help="Loopback host; use an SSH forward for remote access."),
@@ -358,18 +440,9 @@ def web_setup(ctx: typer.Context,
 def restore(ctx: typer.Context):
     require_root()
     store, manager, runner = objects(ctx)
-    bindings = store.apps()
-    needed = {a.profile_id for a in bindings if a.enabled and a.profile_id} | set(store.snapshot()["users"].values())
-    for profile in store.profiles():
-        enabled = run(["systemctl", "is-enabled", "--quiet", f"splitforge-profile-{profile.id}.service"], check=False).returncode == 0
-        if enabled or profile.id in needed:
-            manager.start(profile.id)
-    for binding in bindings:
-        if binding.enabled:
-            runner.bind(binding.id, binding.profile_id, preserve_failover=True)
-    if any(binding.failover_enabled for binding in bindings):
-        from splitforge.core.failover import ensure_service
-        ensure_service(store)
+    enabled = [profile.id for profile in store.profiles() if run(
+        ['systemctl', 'is-enabled', '--quiet', f'splitforge-profile-{profile.id}.service'], check=False).returncode == 0]
+    runner.restore(enabled)
     typer.echo("Enabled workload assignments restored")
 
 

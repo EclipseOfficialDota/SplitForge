@@ -61,7 +61,7 @@ class WebTests(unittest.TestCase):
         self.panel.route_baseline = "[]"
 
     def test_assets_are_packaged_and_state_requires_login(self):
-        for path in ("/", "/app.js", "/app.css"):
+        for path in ("/", "/app.js", "/app.css", "/i18n.js"):
             code, content, headers = self.request("GET", path)
             self.assertEqual(code, 200)
             self.assertGreater(len(content), 100)
@@ -144,6 +144,32 @@ class WebTests(unittest.TestCase):
              patch("splitforge.web.server.dependencies.install", return_value="installed") as install:
             self.panel._dispatch({"action": "cores.install", "names": ["slipstream-client"]}, Mock())
         self.assertEqual([call.args[0] for call in install.call_args_list], ["base", "xray", "tun2socks", "slipstream-client"])
+
+    @unittest.skipUnless(os.name == 'posix', 'Backup validation uses POSIX state')
+    def test_backup_export_download_auth_and_restore_confirmation(self):
+        from splitforge.core.backup import decrypt
+        self.make_live()
+        self.login()
+        password = 'test-only-web-backup-password'
+        document = {'format': 1, 'state': {'version': 1, 'profiles': {}, 'apps': {}, 'users': {}},
+                    'certificates': {}, 'web': None, 'enabled_profiles': []}
+        with patch('splitforge.core.backup.capture', return_value=document):
+            self.assertEqual(self.request('POST', '/api/action', {'action': 'backup.export', 'password': password})[0], 202)
+            self.panel.worker.join(timeout=5)
+        self.assertEqual(self.panel.jobs[0]['state'], 'success', self.panel.jobs[0])
+        identifier = self.panel.jobs[0]['result']['download']
+        code, archive, headers = self.request('GET', '/api/backup?id=' + identifier)
+        self.assertEqual(code, 200)
+        self.assertIn('application/octet-stream', headers['Content-Type'])
+        self.assertEqual(decrypt(archive, password), document)
+        self.assertNotIn(password, json.dumps(self.panel.snapshot()))
+        with patch('splitforge.core.backup.restore_backup') as restore:
+            with self.assertRaisesRegex(ValueError, 'Confirm replacement'):
+                self.panel._dispatch({'action': 'backup.restore', 'password': password, 'archive': archive}, Mock())
+            self.panel._dispatch({'action': 'backup.restore', 'password': password, 'archive': archive, 'confirm': True}, Mock())
+            self.assertFalse(restore.call_args.kwargs['start'])
+        self.cookie = ''
+        self.assertEqual(self.request('GET', '/api/backup?id=' + identifier)[0], 401)
 
     @unittest.skipUnless(os.name == "posix", "State locking uses POSIX")
     def test_snapshot_never_exposes_profile_credentials(self):
