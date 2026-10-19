@@ -56,6 +56,30 @@ privileges, restart semantics, current limits and the Linux validation record.
 Documentation examples should parse, but syntax validation alone must not be
 described as a successful network test.
 
+## Publishing a patch / انتشار پچ
+
+Every shipped patch needs its own version, tag and GitHub Release. Include
+English and Persian notes describing changes, fixes, verification and known
+limits. Never reuse an existing version for changed application code. Tag the
+tested commit as `vX.Y.Z`, then publish its release. The `Release packages`
+workflow verifies that the tag matches `pyproject.toml`, builds the wheel and
+source distribution, attaches both with `SHA256SUMS`, and publishes the same
+files under `/dist/` in `ghcr.io/eclipseofficialdota/splitforge:vX.Y.Z`.
+
+The GHCR package is a distribution archive, not a runnable network container.
+Download release assets for normal installation; do not use `docker run` to
+deploy this archive. Keep native systemd/network namespace installation.
+Check the workflow and attached assets after publishing. New GHCR packages may
+need their visibility set to Public in GitHub package settings. Historical
+releases retain the validation scope of their own versions.
+
+برای هر پچ منتشرشده، شمارهٔ نسخهٔ جدید، تگ و Release جداگانه بسازید. توضیحات
+فارسی و انگلیسی باید تغییرات، رفع باگ‌ها، تست‌ها و محدودیت‌ها را بیان کنند.
+گردش‌کار انتشار، فایل‌های نصب و سورس و SHA-256 را به Release اضافه می‌کند و
+همان فایل‌ها را در بخش Packages ثبت می‌کند. بستهٔ GHCR آرشیو فایل‌های نصب است؛
+برای اجرای برنامه از نصب مستقیم روی لینوکس استفاده کنید. نتیجهٔ گردش‌کار و
+عمومی‌بودن بسته را بعد از انتشار بررسی کنید.
+
 ## Licensing
 
 Submit only material you are entitled to contribute. Contributions to this
