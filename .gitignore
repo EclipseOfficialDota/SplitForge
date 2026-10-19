@@ -21,3 +21,12 @@ state.json.lock
 Thumbs.db
 node_modules/
 test-results/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+*.log
+*.swp
+*.swo
+*~
