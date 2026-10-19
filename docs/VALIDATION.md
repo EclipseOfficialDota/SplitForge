@@ -2,11 +2,11 @@
 
 [README](../README.md) · [Setup](GETTING_STARTED.md) · [Architecture](ARCHITECTURE.md)
 
-Recorded during development on 2026-10-16/17. These are actual local results,
+Recorded during development on 2026-10-16 through 2026-10-19. These are actual results,
 not an external audit, performance benchmark or universal production certificate.
 GitHub CI has its own independently visible run status.
 
-Final local suite: **31 tests passed, zero skipped**, with
+Initial local suite: **31 tests passed, zero skipped**, with
 `SPLITFORGE_INTEGRATION=1` (22.858 seconds). The same suite without opt-in
 skips the three privileged integration methods. Lint, package build, installed
 UI smoke test, installer upgrade/restore (empty saved state), and all local
@@ -17,6 +17,24 @@ privileged integration suite. Runtime constraints select a Python-3.10-compatibl
 platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin.
 
 ## Environment
+
+Version 2.8.1: **10 web setup tests passed**, including real root systemd and
+TLS proxy checks (2.273 seconds). Generated services use null standard input
+without the newer `--foreground` option, so the same web service can also run
+the older 2.3.0 CLI during rollback. Wheel and source distribution builds passed.
+
+On 2026-10-19, an authorized Ubuntu 24.04 VPS was upgraded from 2.3.0 to 2.8.1.
+The first interactive `splitforge web` wizard configured public IP HTTPS on
+port 9090 and obtained a real Let's Encrypt IP certificate. An independent
+Windows client verified the system-trusted certificate, its matching IP SAN
+and an HTTP 200 session response without disabling TLS verification. Token
+login, Secure session cookies, logout and the active renewal timer were checked.
+An actual installation rollback then served version 2.3.0 through that same
+HTTPS endpoint; restoring the recovery snapshot served 2.8.1 again. The final
+web service, nginx and renewal timer were active. The host IPv4 main route
+table matched its pre-upgrade snapshot and the SSH session remained connected.
+This server had no registered profiles or applications: these deployment checks
+do not establish live provider interoperability or customer workload continuity.
 
 Version 2.8.0: **105 tests passed with root integration enabled** (145.593
 seconds), plus the expanded desktop/mobile browser suite, lint and syntax checks.
