@@ -37,6 +37,10 @@ def snapshot_installation(prefix, state, *, kind='update'):
         with StateStore(state).operation():
             StateStore(state).snapshot()
             atomic_secret(directory / 'state.json', state.read_text())
+    from splitforge.core.traffic import TrafficStore
+    traffic = TrafficStore(StateStore(state))
+    if traffic.path.exists():
+        atomic_secret(directory / 'traffic.json', json.dumps(traffic.snapshot()))
     # Copy, never hard-link: pip replaces/mutates the active environment in place.
     shutil.copytree(prefix / 'venv', directory / 'venv', symlinks=True)
     from splitforge.web.setup import CONFIG
@@ -47,6 +51,31 @@ def snapshot_installation(prefix, state, *, kind='update'):
         'state': str(state), 'state_existed': state.exists(), 'created': time.time(),
         'revision': revision.read_text().strip() if revision.is_file() else ''}))
     return directory
+
+
+def restore_traffic_snapshot(state, source):
+    from splitforge.core.traffic import TrafficStore, validate_data
+    traffic = TrafficStore(StateStore(state))
+    with traffic.locked():
+        if (source / 'traffic.json').is_file():
+            traffic.write(validate_data(json.loads((source / 'traffic.json').read_text())))
+        else:
+            traffic.path.unlink(missing_ok=True)
+
+
+def clear_owned_resources(state):
+    from splitforge.core.backup import _clear
+    from splitforge.core.runner import Runner
+    from splitforge.protocols.manager import ProtocolManager
+    store = StateStore(state)
+    manager = ProtocolManager(store)
+    _clear(store, manager, Runner(store, manager))
+
+
+def restore_user_bindings(executable, state):
+    # Older CLI restore implementations did not reapply user-manager drop-ins.
+    for user, profile_id in StateStore(state).snapshot()['users'].items():
+        run([str(executable), '--state', str(state), 'user', 'bind', user, profile_id], timeout=180)
 
 
 def available_backups(prefix, state):
@@ -92,28 +121,37 @@ def rollback(state: Path, *, prefix=None, backup_id=None, report=print):
         held = prefix / f'.rollback-current-{time.time_ns()}'
         executable = prefix / 'venv/bin/splitforge'
         stopping = False
+        resources_changed = False
         try:
             shutil.copytree(source / 'venv', stage, symlinks=True)
             stopping = True
             run([str(executable), '--state', str(state), 'stop-all', '--preserve'], timeout=600)
+            from splitforge.core.traffic import MARKER as TRAFFIC_MARKER, unit_name as traffic_unit_name
+            traffic_unit = Path('/etc/systemd/system', traffic_unit_name(StateStore(state)))
+            if traffic_unit.is_file() and traffic_unit.read_text().startswith(TRAFFIC_MARKER):
+                run(['systemctl', 'disable', '--now', traffic_unit.name], timeout=190)
             from splitforge.core.failover import MARKER, unit_name
             monitor = Path('/etc/systemd/system', unit_name(StateStore(state)))
             if monitor.is_file() and monitor.read_text().startswith(MARKER):
                 # Older snapshots may not contain the failover module at all.
                 # Policy-aware restore will re-enable it when needed.
                 run(['systemctl', 'disable', monitor.name])
+            resources_changed = True
+            clear_owned_resources(state)
             (prefix / 'venv').rename(held)
             stage.rename(prefix / 'venv')
             if selected['state_existed']:
                 atomic_secret(state, (source / 'state.json').read_text())
             else:
                 state.unlink(missing_ok=True)
+            restore_traffic_snapshot(state, source)
             marker = prefix / '.splitforge-revision'
             if selected['revision']:
                 atomic_secret(marker, selected['revision'] + '\n', 0o644)
             else:
                 marker.unlink(missing_ok=True)
             run([str(executable), '--state', str(state), 'restore'], timeout=600)
+            restore_user_bindings(executable, state)
         except Exception as failure:
             try:
                 if held.exists():
@@ -122,19 +160,23 @@ def rollback(state: Path, *, prefix=None, backup_id=None, report=print):
                             run([str(executable), '--state', str(state), 'stop-all', '--preserve'], timeout=600, check=False)
                         except (OSError, subprocess.TimeoutExpired):
                             pass
+                        clear_owned_resources(state)
                         shutil.rmtree(prefix / 'venv')
                     held.rename(prefix / 'venv')
+                if resources_changed:
                     current_manifest = json.loads((current / 'manifest.json').read_text())
                     if current_manifest['state_existed']:
                         atomic_secret(state, (current / 'state.json').read_text())
                     else:
                         state.unlink(missing_ok=True)
+                    restore_traffic_snapshot(state, current)
                     if current_manifest['revision']:
                         atomic_secret(prefix / '.splitforge-revision', current_manifest['revision'] + '\n', 0o644)
                     else:
                         (prefix / '.splitforge-revision').unlink(missing_ok=True)
                 if stopping:
                     run([str(executable), '--state', str(state), 'restore'], timeout=600)
+                    restore_user_bindings(executable, state)
             except Exception as recovery:
                 raise RuntimeError(f'Rollback and recovery restart failed; retain snapshot {current}') from recovery
             raise RuntimeError(f'Rollback failed; current installation retained. Recovery snapshot: {current}') from failure

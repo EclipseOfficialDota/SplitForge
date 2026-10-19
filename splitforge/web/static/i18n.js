@@ -345,7 +345,75 @@
     routing: "مسیریابی",
   };
   Object.assign(fa, {
-    'Request is empty or exceeds its allowed size': 'درخواست خالی یا بزرگ‌تر از حجم مجاز است',
+    'Specify a traffic limit or an explicit disabled value': 'مقدار سقف مصرف یا غیرفعال‌سازی آن را صریحاً مشخص کنید',
+    "COLLECTOR ACTIVE": "پایشگر فعال",
+    "COLLECTOR STOPPED": "پایشگر متوقف",
+    "Traffic budget usage": "میزان استفاده از سقف مصرف",
+    "Traffic & quotas": "مصرف و سقف ترافیک",
+    Traffic: "مصرف",
+    "& budgets.": "و سقف مصرف.",
+    "Each application has its own counter. Follow tunnel usage and set a budget.":
+      "هر برنامه شمارندهٔ مستقل دارد. مصرف تونل‌ها را ببینید و سقف مصرف تعیین کنید.",
+    "Enable collector": "فعال‌سازی پایش مصرف",
+    "WORKSPACE / TRAFFIC": "محیط کار / مصرف ترافیک",
+    "Budgets stop workloads at the next sample (normally every 5 seconds). Bursts can exceed the limit before stopping. App counters include local IP traffic; tunnel counters include shared DNS and protocol traffic.":
+      "در نمونه‌برداری بعدی (معمولاً هر ۵ ثانیه) برنامه یا تونل متوقف می‌شود؛ ترافیک لحظه‌ای ممکن است پیش از توقف از سقف عبور کند. شمارندهٔ برنامه شامل ترافیک IP محلی و شمارندهٔ تونل شامل DNS و ترافیک مشترک پروتکل است.",
+    "Application traffic": "مصرف برنامه‌ها",
+    "Tunnel traffic": "مصرف تونل‌ها",
+    "Budget alerts": "هشدارهای مصرف",
+    "No budget alerts": "هشدار مصرفی ثبت نشده است",
+    APPLICATION: "برنامه",
+    TUNNEL: "تونل",
+    "BUDGET BLOCKED": "متوقف با سقف مصرف",
+    "COUNTERS LIVE": "شمارندهٔ زنده",
+    "LAST READING": "آخرین اندازه‌گیری",
+    "Independent service kernel counters": "شمارندهٔ مستقل کرنل برای این سرویس",
+    "Shared tunnel interface counters": "شمارندهٔ رابط مشترک تونل",
+    "No verified counter reading yet": "هنوز اندازه‌گیری معتبر دریافت نشده است",
+    "Collecting rate history…": "در حال جمع‌آوری سابقهٔ سرعت…",
+    "Receive and send rate history": "نمودار سرعت دریافت و ارسال",
+    Received: "دریافت",
+    Sent: "ارسال",
+    "Budget usage": "مصرف دوره",
+    Unlimited: "بدون سقف",
+    "Traffic warning threshold reached": "مصرف به آستانهٔ هشدار رسیده است",
+    "Set budget": "تنظیم سقف مصرف",
+    "Traffic budget": "سقف مصرف ترافیک",
+    "Limit in MiB (0 disables budget)": "سقف به مِبی‌بایت (صفر یعنی غیرفعال)",
+    "Warning at percent": "درصد هشدار",
+    "Reset usage period from now": "شروع دورهٔ مصرف از همین لحظه",
+    "Changing routes or restarting does not reset usage. Resetting the period or increasing the limit permits a manual restart; it does not start a workload automatically.":
+      "تغییر مسیر یا ری‌استارت مصرف را صفر نمی‌کند. با شروع دورهٔ جدید یا افزایش سقف، می‌توانید برنامه را دستی اجرا کنید؛ اجرای خودکار انجام نمی‌شود.",
+    "Save budget": "ذخیرهٔ سقف مصرف",
+    "Budget must be a valid nonnegative MiB amount":
+      "مقدار سقف مصرف باید عدد معتبر و نامنفی به مِبی‌بایت باشد",
+    "Traffic quota blocks this workload; reset its budget or increase the limit":
+      "سقف مصرف جلوی اجرا را گرفته است؛ دوره را از نو شروع کنید یا سقف را افزایش دهید",
+    "Traffic monitor is unavailable; quota-protected startup was blocked":
+      "پایش مصرف در دسترس نیست؛ اجرای برنامهٔ دارای سقف مصرف مسدود شد",
+    "Start this target and verify independent counters before setting a quota":
+      "ابتدا برنامه یا تونل را اجرا کنید و شمارندهٔ مستقل آن را بررسی کنید؛ سپس سقف تعیین کنید",
+    "Kernel/systemd independent IP accounting is unavailable":
+      "شمارش مستقل IP در کرنل یا systemd این میزبان در دسترس نیست",
+    "Reapply the app route to enable independent kernel IP accounting":
+      "برای فعال‌سازی شمارندهٔ مستقل کرنل، مسیر برنامه را دوباره اعمال کنید",
+    "Application is stopped; its last counter reading is retained":
+      "برنامه متوقف است؛ آخرین اندازه‌گیری مصرف آن حفظ شده است",
+    "Start the application to collect independent counters":
+      "برای دریافت شمارندهٔ مستقل، برنامه را اجرا کنید",
+    "Start the tunnel to collect interface counters":
+      "برای دریافت شمارندهٔ رابط، تونل را اجرا کنید",
+    "Restart this tunnel to enable persistent activation accounting":
+      "برای شمارش پایدار مصرف، این تونل را دوباره اجرا کنید",
+    "Tunnel interface accounting is unavailable":
+      "شمارندهٔ رابط تونل در دسترس نیست",
+    warning: "هشدار",
+    blocked: "متوقف",
+    quota: "سقف مصرف",
+    "accounting unavailable": "شمارنده در دسترس نیست",
+    "quota warning threshold": "آستانهٔ هشدار مصرف",
+    "Request is empty or exceeds its allowed size":
+      "درخواست خالی یا بزرگ‌تر از حجم مجاز است",
     "Encrypted backup & recovery": "پشتیبان رمزگذاری‌شده و بازیابی",
     "Export configuration": "خروجی گرفتن از تنظیمات",
     "Includes profiles, app routes, DNS, failover and web settings. Keep your password separately; it cannot be recovered.":
@@ -463,6 +531,11 @@
       "تغییرات سایر ابزارهای شبکه را بررسی کنید؛ تعمیر مسیرهای میزبان را بازنشانی نمی‌کند.",
   });
   const patterns = [
+    [/^Peak (.+)\/s$/, (_, amount) => `بیشترین سرعت ${amount} در ثانیه`],
+    [
+      /^Last sampled (.+)$/,
+      (_, timestamp) => `آخرین نمونه‌برداری ${timestamp}`,
+    ],
     [
       /^◌ (.+) · (.+)$/,
       (_, action, status) => `◌ ${action} · ${lookup(status)}`,

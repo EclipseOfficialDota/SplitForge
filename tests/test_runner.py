@@ -13,6 +13,9 @@ from splitforge.state import AppBinding, Profile
 
 class RunnerTests(unittest.TestCase):
     def setUp(self):
+        traffic_service = patch('splitforge.core.traffic.ensure_service')
+        traffic_service.start()
+        self.addCleanup(traffic_service.stop)
         self.root = types.SimpleNamespace(pw_uid=0)
         self.user = types.SimpleNamespace(pw_uid=1000)
         self.passwords = patch.dict(sys.modules, {"pwd": types.SimpleNamespace(

@@ -284,12 +284,15 @@ class ProtocolManager:
     def start(self, name: str):
         require_root()
         profile = self.store.profile(name)
+        from splitforge.core.traffic import TrafficStore, ensure_service, unit_name
+        TrafficStore(self.store).guard('profiles', profile.id)
         missing = self.missing(profile.protocol)
         if missing:
             raise RuntimeError("Missing dependencies: " + ", ".join(missing))
+        ensure_service(self.store)
         command = [sys.executable, "-m", "splitforge.protocols.manager", "--state", str(self.store.path.resolve())]
         content = (f"[Unit]\nDescription=SplitForge profile {profile.id}\nAfter=network-online.target\n"
-                   "Wants=network-online.target\n[Service]\nType=oneshot\nRemainAfterExit=yes\n"
+                   f"Wants=network-online.target {unit_name(self.store)}\nAfter={unit_name(self.store)}\n[Service]\nType=oneshot\nRemainAfterExit=yes\n"
                    + "ExecStart=" + " ".join(unit_word(a) for a in [*command, "up", profile.id]) + "\n"
                    + "ExecStop=" + " ".join(unit_word(a) for a in [*command, "down", profile.id]) + "\n"
                    + "TimeoutStartSec=150\nTimeoutStopSec=120\n[Install]\nWantedBy=multi-user.target\n")
@@ -322,6 +325,8 @@ class ProtocolManager:
         elif self.netns.exists(profile):
             raise ValueError("Inspect the orphan namespace before removing state")
         self.store.delete_profile(profile.id)
+        from splitforge.core.traffic import cleanup_if_unused
+        cleanup_if_unused(self.store)
 
     def _service(self, profile: Profile, role: str, argv: list[str], *, namespace: bool = False,
                  restart: bool = True):
@@ -357,10 +362,13 @@ class ProtocolManager:
 
     def _up(self, profile: Profile):
         require_root()
+        from splitforge.core.traffic import TrafficStore
+        TrafficStore(self.store).guard('profiles', profile.id, monitor=True)
         with self.store.operation():
             profile = self.store.profile(profile.id)
             runtime = Path("/run/splitforge", profile.id)
             runtime.mkdir(parents=True, mode=0o700, exist_ok=True)
+            atomic_secret(runtime / 'traffic.id', uuid.uuid4().hex)
             self.netns.create(profile)
             try:
                 if profile.protocol == "wireguard":
@@ -454,6 +462,14 @@ class ProtocolManager:
         with self.store.operation():
             for role in ("dns", "tun", "core", "transport"):
                 run(["systemctl", "stop", f"splitforge-{role}-{profile.id}.service"], check=False, timeout=15)
+            try:
+                from splitforge.core.traffic import TrafficStore
+                traffic = TrafficStore(self.store)
+                if self.netns.exists(profile):
+                    traffic.record('profiles', profile.id, traffic.profile_sample(self, profile))
+            except Exception:
+                import logging
+                logging.getLogger('splitforge.traffic').exception('Could not save final tunnel counters')
             self.netns.destroy(profile)
             runtime = Path("/run/splitforge", profile.id)
             if runtime.exists():

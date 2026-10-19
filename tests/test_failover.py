@@ -13,6 +13,9 @@ from splitforge.state import AppBinding, Profile, StateStore
 
 class FailoverTests(unittest.TestCase):
     def setUp(self):
+        traffic_service = patch('splitforge.core.traffic.ensure_service')
+        traffic_service.start()
+        self.addCleanup(traffic_service.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.store = StateStore(Path(self.temp.name) / 'state.json')
         self.primary = self.store.save_profile(Profile('primary', 'socks5', {}))

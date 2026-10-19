@@ -40,12 +40,13 @@ class RollbackTests(unittest.TestCase):
                             if fail:
                                 raise RuntimeError('Old workload failed to start')
                         return subprocess.CompletedProcess(argv, 1 if argv[0] == 'systemctl' else 0, '', '')
-                    with patch.object(updater, 'run', side_effect=command):
+                    with patch.object(updater, 'run', side_effect=command), patch.object(updater, 'clear_owned_resources') as clear:
                         if fail:
                             with self.assertRaisesRegex(RuntimeError, 'current installation retained'):
                                 updater.rollback(state, prefix=prefix, backup_id=snapshot.name, report=lambda _: None)
                         else:
                             updater.rollback(state, prefix=prefix, backup_id=snapshot.name, report=lambda _: None)
+                    self.assertGreaterEqual(clear.call_count, 1)
                     self.assertEqual((binaries / 'python').read_text(), 'new environment' if fail else 'old environment')
                     self.assertEqual(state.read_text(), current if fail else original)
                     self.assertEqual((prefix / '.splitforge-revision').read_text().strip(), ('b' if fail else 'a') * 40)

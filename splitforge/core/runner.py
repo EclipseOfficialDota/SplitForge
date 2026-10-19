@@ -65,16 +65,25 @@ class Runner:
             raise ValueError("Shared profile namespaces require kill-switch and DNS isolation")
         dependencies = (f"BindsTo=splitforge-profile-{profile.id}.service\n"
                         f"After=splitforge-profile-{profile.id}.service\n" if profile else "")
+        from splitforge.core.traffic import unit_name
+        dependencies += f'Wants={unit_name(self.store)}\nAfter={unit_name(self.store)}\n'
         network = "\n".join(self._network(profile))
         hardening = "NoNewPrivileges=yes\nCapabilityBoundingSet=\nAmbientCapabilities=\nRestrictSUIDSGID=yes\n"
+        helper = [sys.executable, '-m', 'splitforge.core.traffic', '--state', str(self.store.path.resolve())]
+        check = ['check', '--app', app.id] + (['--profile', profile.id] if profile else [])
+        accounting = ('IPAccounting=yes\nExecCondition=' + ' '.join(unit_word(word) for word in
+                       ['+' + helper[0], *helper[1:], *check])
+                      + '\nExecStopPost=' + ' '.join(unit_word(word) for word in
+                       ['-+' + helper[0], *helper[1:], 'final', '--app', app.id]) + '\n')
         if app.service:
-            return f"[Unit]\n{dependencies}\n[Service]\n{network}\n{hardening}"
+            return (f"[Unit]\n{dependencies}\n[Service]\n{network}\n{hardening}{accounting}" if profile
+                    else f'[Unit]\n{dependencies}\n[Service]\n{accounting}')
         command = " ".join(unit_word(a) for a in app.argv)
         return (f"[Unit]\nDescription=SplitForge application {app.id}\n{dependencies}\n"
                 f"[Service]\nType=exec\nUser={app.user}\n"
                 f"WorkingDirectory={app.cwd.replace('%', '%%')}\nExecStart={command}\n"
                 f"Restart=on-failure\nRestartSec=3\nKillMode=control-group\nTimeoutStopSec=20\n"
-                f"{network}\n{hardening}\n[Install]\nWantedBy=multi-user.target\n")
+                f"{network}\n{hardening}{accounting}\n[Install]\nWantedBy=multi-user.target\n")
 
     def running(self, app: AppBinding) -> bool:
         return run(["systemctl", "is-active", "--quiet", self.unit(app)], check=False).returncode == 0
@@ -107,6 +116,11 @@ class Runner:
         if expected is not None and current != expected:
             raise RuntimeError('Application assignment changed during the health check; retry with current policy')
         self._validate_service(current)
+        from splitforge.core.traffic import TrafficStore
+        if start:
+            TrafficStore(self.store).guard('apps', app_id)
+            from splitforge.core.traffic import ensure_service
+            ensure_service(self.store)
         profile = self.store.profile(profile_name) if profile_name else None
         backup = self.store.profile(backup_profile_name) if backup_profile_name else None
         primary = profile
@@ -159,10 +173,7 @@ class Runner:
             if self.running(old):
                 raise RuntimeError("Application did not stop; assignment was not changed")
             try:
-                if updated.service and profile is None:
-                    path.unlink(missing_ok=True)
-                else:
-                    atomic_secret(path, content, 0o644)
+                atomic_secret(path, content, 0o644)
                 run(["systemctl", "daemon-reload"])
                 if start and not deferred:
                     run(["systemctl", "start", self.unit(updated)])
@@ -216,6 +227,8 @@ class Runner:
             self._path(app).unlink(missing_ok=True)
             run(["systemctl", "daemon-reload"])
             self.store.delete_app(app_id)
+        from splitforge.core.traffic import cleanup_if_unused
+        cleanup_if_unused(self.store)
 
     def execute(self, argv: list[str], *, profile_name: str | None = None,
                 user: str = "nobody", cwd: str | None = None) -> int:

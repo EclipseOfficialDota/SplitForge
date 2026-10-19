@@ -78,11 +78,15 @@ def validate(document: dict) -> dict:
     if document.get('web') is not None:
         from splitforge.web.setup import WebSettings
         WebSettings(**document['web']).validate()
+    if document.get('traffic') is not None:
+        from splitforge.core.traffic import validate_data
+        validate_data(document['traffic'])
     return document
 
 
 def capture(store: StateStore) -> dict:
     from splitforge.web.setup import load_settings
+    from splitforge.core.traffic import TrafficStore
     snapshot = store.snapshot()
     certificates = {}
     for key, profile in snapshot['profiles'].items():
@@ -96,7 +100,8 @@ def capture(store: StateStore) -> dict:
         ['systemctl', 'is-enabled', '--quiet', f'splitforge-profile-{key}.service'], check=False).returncode == 0]
     return validate({'format': 1, 'created': time.time(), 'version': __version__, 'state': snapshot,
                      'enabled_profiles': enabled, 'certificates': certificates,
-                     'web': dataclasses.asdict(settings) if settings else None})
+                     'web': dataclasses.asdict(settings) if settings else None,
+                     'traffic': TrafficStore(store).snapshot()})
 
 
 def export_backup(store, destination, password):
@@ -117,6 +122,8 @@ def read_backup(source, password):
 
 def _clear(store, manager, runner):
     from splitforge.core.failover import unit_name
+    from splitforge.core.traffic import stop_service
+    stop_service(store)
     run(['systemctl', 'disable', '--now', unit_name(store)], check=False, timeout=310)
     if run(['systemctl', 'is-active', '--quiet', unit_name(store)], check=False).returncode == 0:
         raise RuntimeError('Stop the failover monitor before restoring configuration')
@@ -130,6 +137,7 @@ def _clear(store, manager, runner):
 
 def restore_backup(store, manager, runner, document, password, *, start=True, report=print):
     require_root()
+    from splitforge.core.traffic import TrafficStore, empty_data
     validate(document)  # Authenticate and validate before touching any current resources.
     previous = capture(store)
     for item in document['state']['apps'].values():
@@ -156,6 +164,9 @@ def restore_backup(store, manager, runner, document, password, *, start=True, re
         _clear(store, manager, runner)
         with store.operation():
             store._write(target)
+        traffic = TrafficStore(store)
+        with traffic.locked():
+            traffic.write(document.get('traffic') or empty_data())
         if document.get('web'):
             # Preserve current login/listener; the CLI can explicitly redeploy it.
             atomic_secret(store.path.parent / 'restored-web.json', json.dumps(document['web'], indent=2))
@@ -166,6 +177,9 @@ def restore_backup(store, manager, runner, document, password, *, start=True, re
             _clear(store, manager, runner)
             with store.operation():
                 store._write(previous['state'])
+            traffic = TrafficStore(store)
+            with traffic.locked():
+                traffic.write(previous.get('traffic') or empty_data())
             runner.restore(previous.get('enabled_profiles', []))
         except Exception as rollback:
             raise RuntimeError(f'Restore and recovery restart failed; encrypted recovery retained at {recovery}') from rollback

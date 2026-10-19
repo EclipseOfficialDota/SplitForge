@@ -137,6 +137,12 @@ class WebTests(unittest.TestCase):
         self.panel._dispatch({'action': 'app.test', 'id': 'aa000001'}, Mock())
         self.panel.runner.test.assert_called_once_with('aa000001')
         self.assertEqual(self.panel.app_tests['aa000001']['pid'], 200)
+        self.panel.traffic = Mock()
+        self.panel._dispatch({'action': 'traffic.quota', 'kind': 'apps', 'id': 'aa000001', 'limit': 1048576,
+                              'warning': 90, 'reset': True}, Mock())
+        self.panel.traffic.set_quota.assert_called_once_with('apps', 'aa000001', 1048576, warning=90, reset=True)
+        with self.assertRaisesRegex(ValueError, 'explicit disabled'):
+            self.panel._dispatch({'action': 'traffic.quota', 'kind': 'apps', 'id': 'aa000001'}, Mock())
         self.panel.manager = Mock()
         self.panel._dispatch({"action": "profile.import", "source": "socks5://127.0.0.1:1080", "name": "test"}, Mock())
         self.panel.manager.import_profile.assert_called_once_with("socks5://127.0.0.1:1080", name="test", replace_id=None)

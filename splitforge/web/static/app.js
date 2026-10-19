@@ -17,6 +17,7 @@ const pages = {
   cores: "Core installer",
   logs: "Live logs",
   help: "Quick start",
+  traffic: "Traffic & quotas",
 };
 let state = null,
   csrf = "",
@@ -232,6 +233,89 @@ function coresPage() {
     `<form id="cores-form"><div class="component-list">${state.components.map((c) => `<label class="component"><input type="checkbox" name="core" value="${e(c.id)}"><span><strong>${e(c.id)}</strong><small>${e(c.description.split(" / ")[0])}</small><span class="badge ${c.installed ? "" : "offline"}">${c.installed ? "✓ INSTALLED · WILL SKIP" : "↓ NOT INSTALLED"}</span></span></label>`).join("")}</div><div class="notice">Binary downloads verify SHA-256. DNSTT builds from pinned source and can take several minutes. Installed tools are skipped; profiles are never started by installation.</div><p id="core-plan" class="field-hint">Select components to review the plan.</p><div class="heading-actions"><button type="submit" class="button primary" id="install-cores">↓ Install selected cores</button></div></form>${operations()}`
   );
 }
+function trafficGraph(history) {
+  const points = [];
+  for (let index = 1; index < history.length; index++) {
+    const previous = history[index - 1],
+      current = history[index],
+      seconds = current[0] - previous[0];
+    if (seconds > 0)
+      points.push([
+        Math.max(0, current[1] - previous[1]) / seconds,
+        Math.max(0, current[2] - previous[2]) / seconds,
+      ]);
+  }
+  if (points.length < 2)
+    return '<div class="traffic-empty">Collecting rate history…</div>';
+  const peak = Math.max(1, ...points.flat()),
+    width = 400,
+    height = 90;
+  const line = (column) =>
+    points
+      .map(
+        (point, index) =>
+          `${((index / (points.length - 1)) * width).toFixed(2)},${(height - (point[column] / peak) * (height - 8)).toFixed(2)}`,
+      )
+      .join(" ");
+  return `<svg class="traffic-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Receive and send rate history"><path class="traffic-grid" d="M0 30H400M0 60H400M0 89H400"/><polyline class="traffic-rx" points="${line(0)}"/><polyline class="traffic-tx" points="${line(1)}"/></svg><div class="traffic-legend"><span class="green-text">↓ Received</span><span class="teal-text">↑ Sent</span><span>Peak ${e(bytes(peak))}/s</span></div>`;
+}
+function trafficCard(kind, target) {
+  const source = state.traffic?.[kind]?.[target.id],
+    row = source ? { ...source } : null,
+    supported = Boolean(row?.supported),
+    quota = row?.quota;
+  const used = supported ? Math.max(0, row.rx + row.tx - row.baseline) : 0;
+  const percent = quota ? Math.min(100, (used / quota) * 100) : 0;
+  if (row)
+    row.available =
+      row.available &&
+      (kind === "apps" ? target.running : target.active) &&
+      Date.now() / 1000 - row.updated < 20;
+  return `<article class="profile-card traffic-card"><div class="profile-card-top"><span class="protocol">${kind === "apps" ? "APPLICATION" : "TUNNEL"}</span><span class="badge ${row?.blocked ? "offline" : ""}">${row?.blocked ? "BUDGET BLOCKED" : row?.available ? "COUNTERS LIVE" : "LAST READING"}</span></div><h2 data-no-translate>${e(target.name)}</h2><p class="field-hint">${kind === "apps" ? "Independent service kernel counters" : "Shared tunnel interface counters"}</p>${supported ? `<div class="traffic-total mono">${bytes(row.rx + row.tx)}</div>${trafficGraph(row.history)}<dl class="profile-details"><div><dt>Received</dt><dd>${bytes(row.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(row.tx)}</dd></div><div><dt>Budget usage</dt><dd>${bytes(used)} / ${quota ? bytes(quota) : "Unlimited"}</dd></div></dl>${quota ? `<progress class="download-progress" max="100" value="${percent.toFixed(2)}" aria-label="Traffic budget usage"></progress>` : ""}${row.warned ? '<div class="notice">Traffic warning threshold reached</div>' : ""}` : '<div class="traffic-empty">No verified counter reading yet</div>'}${row?.error ? `<p class="field-hint">${e(row.error)}</p>` : ""}<div class="row-actions">${button("Set budget", kind === "apps" ? "quota-app" : "quota-profile", target.id, "", state.busy || (!supported && !quota))}</div>${row?.updated ? `<small class="field-hint">Last sampled ${e(new Date(row.updated * 1000).toLocaleString())}</small>` : ""}</article>`;
+}
+function trafficPage() {
+  const data = state.traffic || { apps: {}, profiles: {}, events: [] };
+  return (
+    header(
+      "Traffic <span>& budgets.</span>",
+      "Each application has its own counter. Follow tunnel usage and set a budget.",
+      button("Enable collector", "traffic-enable", "", "primary"),
+      "WORKSPACE / TRAFFIC",
+    ) +
+    badge(data.collector_active, "COLLECTOR ACTIVE", "COLLECTOR STOPPED") +
+    '<div class="notice">Budgets stop workloads at the next sample (normally every 5 seconds). Bursts can exceed the limit before stopping. App counters include local IP traffic; tunnel counters include shared DNS and protocol traffic.</div>' +
+    (data.error ? `<div class="notice">${e(data.error)}</div>` : "") +
+    '<h2>Application traffic</h2><div class="profile-grid">' +
+    state.apps.map((app) => trafficCard("apps", app)).join("") +
+    "</div>" +
+    '<h2>Tunnel traffic</h2><div class="profile-grid">' +
+    state.profiles.map((profile) => trafficCard("profiles", profile)).join("") +
+    "</div>" +
+    `<section class="panel"><div class="panel-header"><h2>Budget alerts</h2></div><div class="form-panel">${
+      data.events?.length
+        ? data.events
+            .slice()
+            .reverse()
+            .map(
+              (event) =>
+                `<p><span class="badge offline">${e(event.level)}</span> <span data-no-translate>${e((event.kind === "apps" ? state.apps : state.profiles).find((target) => target.id === event.id)?.name || event.id)}</span> · ${e(event.reason)} · ${e(new Date(event.time * 1000).toLocaleString())}</p>`,
+            )
+            .join("")
+        : "<p>No budget alerts</p>"
+    }</div></section>${operations()}`
+  );
+}
+function quotaModal(kind, id) {
+  const row = state.traffic?.[kind]?.[id],
+    target = (kind === "apps" ? state.apps : state.profiles).find(
+      (item) => item.id === id,
+    );
+  if (!target) return;
+  openModal(
+    "Traffic budget",
+    `<form id="quota-form" class="stack"><input type="hidden" name="id" value="${e(id)}"><input type="hidden" name="kind" value="${kind}"><p data-no-translate>${e(target.name)}</p><label for="quota-mib">Limit in MiB (0 disables budget)</label><input id="quota-mib" type="number" min="0" max="8589934591" step="any" name="mib" value="${row?.quota ? row.quota / 1048576 : 0}" required><label for="quota-warning">Warning at percent</label><input id="quota-warning" type="number" min="1" max="99" name="warning" value="${row?.warn_percent || 80}" required><label class="check-inline"><input type="checkbox" name="reset"> Reset usage period from now</label><p class="notice">Changing routes or restarting does not reset usage. Resetting the period or increasing the limit permits a manual restart; it does not start a workload automatically.</p>${formActions("Save budget")}</form>`,
+  );
+}
 function logsPage() {
   return (
     header(
@@ -324,6 +408,7 @@ function renderMain() {
     cores: coresPage,
     logs: logsPage,
     help: helpPage,
+    traffic: trafficPage,
   }[page]();
   if (page === "logs") loadLogs();
   if (page === "cores") updateCorePlan();
@@ -377,7 +462,10 @@ async function poll() {
     renderStatus();
     if (page === "logs" && $("#diagnostics-panel"))
       $("#diagnostics-panel").innerHTML = diagnosticsPanel();
-    if (!previous || ["overview", "router", "profiles"].includes(page)) {
+    if (
+      !previous ||
+      ["overview", "router", "profiles", "traffic"].includes(page)
+    ) {
       const focus = document.activeElement?.id,
         position = focus === "search" ? $("#search")?.selectionStart : null;
       renderMain();
@@ -541,6 +629,10 @@ document.addEventListener("click", async (event) => {
     id = target.dataset.id;
   try {
     if (action === "add-app") addApp();
+    else if (action === "quota-app") quotaModal("apps", id);
+    else if (action === "quota-profile") quotaModal("profiles", id);
+    else if (action === "traffic-enable")
+      await sendAction({ action: "traffic.enable" });
     else if (action === "backup-download") {
       const response = await fetch(`/api/backup?id=${encodeURIComponent(id)}`, {
         credentials: "same-origin",
@@ -640,6 +732,7 @@ document.addEventListener("submit", async (event) => {
       "diagnostics-repair-form",
       "backup-export-form",
       "backup-restore-form",
+      "quota-form",
     ].includes(formId)
   )
     return;
@@ -648,6 +741,22 @@ document.addEventListener("submit", async (event) => {
   if (submit) submit.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (formId === "quota-form") {
+      const mib = Number(data.mib),
+        limit = Math.round(mib * 1048576),
+        warning = Number(data.warning);
+      if (!Number.isSafeInteger(limit) || limit < 0)
+        throw new Error("Budget must be a valid nonnegative MiB amount");
+      await sendAction({
+        action: "traffic.quota",
+        id: data.id,
+        kind: data.kind,
+        limit: limit || null,
+        warning,
+        reset: data.reset === "on",
+      });
+      return;
+    }
     if (formId === "backup-export-form") {
       if (data.password !== data.confirmation)
         throw new Error("Backup passwords do not match");
@@ -745,8 +854,9 @@ document.addEventListener("keydown", (event) => {
     "cores",
     "logs",
     "help",
+    "traffic",
   ];
-  if (/^[1-7]$/.test(event.key)) {
+  if (/^[1-8]$/.test(event.key)) {
     event.preventDefault();
     navigate(keys[Number(event.key) - 1]);
   }

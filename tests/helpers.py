@@ -24,11 +24,15 @@ class TLSFixture:
                 pass
 
             def do_GET(self):
-                data = b"ip=192.0.2.80\nloc=ZZ\n"
+                data = (b'x' * min(int(self.path.rsplit('/', 1)[-1]), 1048576)
+                        if self.path.startswith('/bytes/') else b"ip=192.0.2.80\nloc=ZZ\n")
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
-                self.wfile.write(data)
+                try:
+                    self.wfile.write(data)
+                except (ConnectionError, ssl.SSLError):
+                    pass  # Quota integration deliberately closes active connections.
 
             def do_POST(self):
                 query = self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 4096))

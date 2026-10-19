@@ -27,13 +27,53 @@ deps = typer.Typer(help="Inspect or install protocol dependencies.")
 users = typer.Typer(help="Route future systemd user-manager workloads.")
 web_app = typer.Typer(invoke_without_command=True, help="Set up and run the web control panel.")
 backups = typer.Typer(help="Encrypted profile/settings export and recovery.")
+traffic_app = typer.Typer(help='Independent application/tunnel usage and sampled traffic budgets.')
 app.add_typer(profiles, name="profile")
 app.add_typer(apps, name="app")
 app.add_typer(deps, name="dependencies")
 app.add_typer(users, name="user")
 app.add_typer(web_app, name="web")
 app.add_typer(backups, name="backup")
+app.add_typer(traffic_app, name='traffic')
 console = Console()
+
+
+@traffic_app.command('enable')
+def traffic_enable(ctx: typer.Context):
+    from splitforge.core.traffic import ensure_service
+    ensure_service(objects(ctx)[0])
+    typer.echo('Persistent traffic collector enabled')
+
+
+@traffic_app.command('status')
+def traffic_status(ctx: typer.Context):
+    require_root()
+    from splitforge.core.traffic import TrafficStore
+    typer.echo(json.dumps(TrafficStore(objects(ctx)[0]).snapshot(), indent=2))
+
+
+@traffic_app.command('quota')
+def traffic_quota(ctx: typer.Context, target: str,
+                  kind: str = typer.Option('app', '--kind', help='app or profile'),
+                  mib: int | None = typer.Option(None, '--mib', min=1),
+                  disable: bool = typer.Option(False, '--disable'),
+                  warning: int = typer.Option(80, '--warning', min=1, max=99),
+                  reset: bool = typer.Option(False, '--reset')):
+    """Set/reset a manual usage period; stops at the next collector sample."""
+    require_root()
+    from splitforge.core.traffic import TrafficStore
+    store, _, _ = objects(ctx)
+    if kind not in ('app', 'profile') or (disable and mib is not None):
+        raise ValueError('Choose app/profile and either --mib or --disable')
+    identifier = app_by_name(store, target).id if kind == 'app' else store.profile(target).id
+    group = 'apps' if kind == 'app' else 'profiles'
+    traffic = TrafficStore(store)
+    previous = traffic.snapshot()[group].get(identifier)
+    limit = None if disable else mib * 1048576 if mib is not None else previous['quota'] if previous else None
+    if mib is None and not disable and not reset:
+        raise ValueError('Use --mib, --disable or --reset')
+    traffic.set_quota(group, identifier, limit, warning=warning, reset=reset)
+    typer.echo('Budget saved; start a previously blocked target explicitly when ready')
 
 
 def backup_password(path: Path | None, *, confirm=False):
@@ -450,6 +490,8 @@ def restore(ctx: typer.Context):
 def stop_all(ctx: typer.Context, preserve: bool = typer.Option(False, "--preserve", help="Keep boot/assignment intent for upgrade restore.")):
     require_root()
     store, manager, runner = objects(ctx)
+    from splitforge.core.traffic import stop_service
+    stop_service(store)
     from splitforge.core.failover import unit_name
     run(['systemctl', 'stop', unit_name(store)], check=False, timeout=310)
     for binding in store.apps():

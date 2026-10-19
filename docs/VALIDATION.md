@@ -18,6 +18,18 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.8.0: **105 tests passed with root integration enabled** (145.593
+seconds), plus the expanded desktop/mobile browser suite, lint and syntax checks.
+The traffic integration transfers different-sized verified-TLS responses through
+two root services in one actual tunnel namespace. The idle service receives none
+of the other service's counters. It verifies app-only stopping, tunnel stopping,
+native systemctl-restart blocking, reset/restart, persistent totals and unchanged
+host routes. An additional six-test targeted run passed after adding a permitted
+backup for a quota-blocked primary and unused monitor cleanup. Browser checks
+cover seven traffic cards, fourteen RX/TX lines, quota draft retention, read-only
+refusal and the Persian traffic page. Real rollback also confirms a post-snapshot
+app's obsolete unit is removed rather than left enabled for the next boot.
+
 Version 2.7.0: **99 tests passed with root integration enabled** (112.585
 seconds), plus the browser suite, lint and documentation checks. Tests cover
 encrypted round trips, unique ciphertext, tamper/wrong-password rejection,

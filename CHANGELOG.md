@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.8.0 — 2026-10-19
+
+- Independent per-service kernel IP counters, persistent tunnel/interface totals,
+  rate graphs, manual usage periods, warning thresholds and sampled stop budgets.
+  Native startup conditions enforce saved app/tunnel budgets across restarts;
+  missing accounting on a limited workload fails closed. No estimated allocation
+  of shared tunnel traffic to applications.
+- English/Persian traffic page, quota dialogs and CLI controls. Counter history,
+  quotas and usage periods are included in encrypted backups and version rollback.
+- Rollback removes obsolete owned units before restoring the selected state,
+  including apps added after the snapshot, and reapplies future user bindings.
+- Real integration covers two root apps sharing one namespace, independent
+  measurements, per-app/per-tunnel stops, reset/restart, quota-blocked primary
+  startup through a permitted backup, and monitor cleanup.
+
 ## 2.7.0 — 2026-10-19
 
 - Password-encrypted, authenticated AES-256-GCM/Scrypt profile/settings backups,

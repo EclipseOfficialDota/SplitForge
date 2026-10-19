@@ -229,6 +229,7 @@ depending on unattended recovery.
 | [Getting started](docs/GETTING_STARTED.md) | Installation, root scripts, services, upgrades and cleanup |
 | [Web panel](docs/WEB_PANEL.md) | Browser dashboard, token sign-in, SSH forwarding and persistent service |
 | [Backups and rollback](docs/BACKUPS.md) | Encrypted exports, restoration and previous-version recovery |
+| [Traffic and budgets](docs/TRAFFIC.md) | Independent app counters, tunnel graphs, warning thresholds and sampled quotas |
 | [فارسی](docs/README.fa.md) | آموزش قدم‌به‌قدم و مدیریت سرور |
 | [Protocols](docs/PROTOCOLS.md) | Provider files, URI formats and DNS tunnels |
 | [Architecture](docs/ARCHITECTURE.md) | Routing ownership, guards and lifecycle |

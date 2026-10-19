@@ -1491,6 +1491,59 @@ body:has(dialog[open]) {
   right: 16px;
   font-family: system-ui, sans-serif;
 }
+.traffic-card {
+  min-width: 0;
+}
+.traffic-chart {
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin-top: 18px;
+  overflow: visible;
+}
+.traffic-chart polyline {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.traffic-rx {
+  stroke: var(--green);
+}
+.traffic-tx {
+  stroke: var(--teal);
+}
+.traffic-grid {
+  fill: none;
+  stroke: #ffffff0b;
+  stroke-width: 1;
+}
+.traffic-total {
+  font-size: 30px;
+  margin: 16px 0 0;
+}
+.traffic-legend {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 11px;
+}
+.traffic-empty {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.operation details {
+  margin-top: 8px;
+  color: var(--muted);
+}
+.operation details pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .window-hint {
   right: 95px;
 }

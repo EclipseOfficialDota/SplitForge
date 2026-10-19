@@ -279,6 +279,14 @@ workloads stopped. CLI commands also offer explicit startup, web redeployment
 and previous-version rollback. Read [Backups and rollback](BACKUPS.md) for the
 archive contents, password handling, recovery behavior and maintenance limits.
 
+### Traffic & quotas
+
+The eighth navigation page shows independent per-service app counters and real
+tunnel interface graphs. Set a manual usage budget, warning threshold or reset
+the usage period; blocked targets require an explicit restart after adjustment.
+Collection is a permanent service. Read [Traffic and budgets](TRAFFIC.md) for
+kernel requirements, counter scope, crash recovery and sampled-stop overshoot.
+
 ### Verify an application's actual route
 
 In **App router**, start the workload and click **Test route**. The check pins

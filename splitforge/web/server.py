@@ -63,6 +63,8 @@ class Panel:
         self.diagnostics = None
         self.app_tests = {}
         self.exports = {}
+        from splitforge.core.traffic import TrafficStore
+        self.traffic = TrafficStore(self.store)
 
     @staticmethod
     def _host_routes():
@@ -105,6 +107,13 @@ class Panel:
                 "doh_url": profile.doh_url, "doh_ip": profile.doh_ip, **live})
         components = [{"id": name, "description": description, "installed": dependencies.component_installed(name)}
                       for name, (_, description) in dependencies.COMPONENTS.items()]
+        try:
+            traffic = self.traffic.snapshot() if not self.demo else self._demo_traffic(profiles, apps)
+            if not self.demo:
+                from splitforge.core.traffic import unit_name
+                traffic['collector_active'] = run(['systemctl', 'is-active', '--quiet', unit_name(self.store)], check=False, timeout=5).returncode == 0
+        except Exception as error:
+            traffic = {'apps': {}, 'profiles': {}, 'events': [], 'error': str(error)[:300]}
         return {"version": __version__, "demo": self.demo, "host": "forge-vps" if self.demo else platform.node(),
             "route_unchanged": self.demo or self._host_routes() == self.route_baseline,
             "memory_percent": round(psutil.virtual_memory().percent, 1), "cpu_percent": psutil.cpu_percent(),
@@ -114,14 +123,30 @@ class Panel:
                       "running": a.enabled if self.demo else self.runner.running(a),
                       "primary_profile_id": a.primary_profile_id, "backup_profile_id": a.backup_profile_id,
                       "failover_enabled": a.failover_enabled} for a in apps],
-            "components": components}
+            "components": components, 'traffic': traffic}
+
+    @staticmethod
+    def _demo_traffic(profiles, apps):
+        from splitforge.core.traffic import empty_data, new_row, update_row
+        data = empty_data()
+        now = time.time()
+        for kind, entities in [('profiles', profiles), ('apps', apps)]:
+            for index, entity in enumerate(entities):
+                row = new_row()
+                for point in range(60):
+                    update_row(row, ('demo', point * (index + 1) * 18000, point * 4000), now - (60 - point) * 5)
+                row['quota'] = 64 * 1024 * 1024
+                data[kind][entity.id] = row
+        data['updated'] = now
+        data['collector_active'] = True
+        return data
 
     def submit(self, data):
         if self.demo:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
                 "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
-                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run", "backup.export", "backup.restore"}:
+                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run", "backup.export", "backup.restore", "traffic.enable", "traffic.quota"}:
             raise ValueError("Unknown action")
         with self.lock:
             if self.busy:
@@ -168,6 +193,19 @@ class Panel:
     def _dispatch(self, data, report):
         action = data["action"]
         target = self._text(data, "id", limit=80)
+        if action == 'traffic.enable':
+            from splitforge.core.traffic import ensure_service
+            ensure_service(self.store)
+            return
+        if action == 'traffic.quota':
+            kind = self._text(data, 'kind', limit=20)
+            if kind not in ('apps', 'profiles'):
+                raise ValueError('Choose apps or profiles')
+            if 'limit' not in data:
+                raise ValueError('Specify a traffic limit or an explicit disabled value')
+            self.traffic.set_quota(kind, target, data.get('limit'), warning=data.get('warning', 80), reset=data.get('reset', False))
+            report('Traffic budget saved; exhausted targets stay stopped until explicitly started')
+            return
         if action in {'backup.export', 'backup.restore'}:
             from splitforge.core.backup import LIMIT, capture, decrypt, encrypt, restore_backup
             password = data.get('password')

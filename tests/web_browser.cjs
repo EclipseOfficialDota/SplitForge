@@ -143,14 +143,49 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       "https://dns.example.com/dns-query",
       "Polling must not erase edits",
     );
-    await page.locator('#backup-password').fill('browser-test-backup-password');
-    await page.locator('#backup-confirm').fill('different-test-password');
-    await page.getByRole('button',{name:'Create encrypted backup',exact:true}).click();
-    await page.locator('#toast').filter({hasText:'Backup passwords do not match'}).waitFor();
-    await page.locator('#backup-confirm').fill('browser-test-backup-password');
-    await page.getByRole('button',{name:'Create encrypted backup',exact:true}).click();
-    await page.locator('#toast').filter({hasText:'Read-only demo'}).waitFor();
-    assert.equal(new URL(page.url()).search,'','Backup passwords never appear in the URL');
+    await page.locator("#backup-password").fill("browser-test-backup-password");
+    await page.locator("#backup-confirm").fill("different-test-password");
+    await page
+      .getByRole("button", { name: "Create encrypted backup", exact: true })
+      .click();
+    await page
+      .locator("#toast")
+      .filter({ hasText: "Backup passwords do not match" })
+      .waitFor();
+    await page.locator("#backup-confirm").fill("browser-test-backup-password");
+    await page
+      .getByRole("button", { name: "Create encrypted backup", exact: true })
+      .click();
+    await page
+      .locator("#toast")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
+    assert.equal(
+      new URL(page.url()).search,
+      "",
+      "Backup passwords never appear in the URL",
+    );
+    await page.locator('[data-page="traffic"]').first().click();
+    assert.equal(await page.locator(".traffic-card").count(), 7);
+    assert.equal(await page.locator(".traffic-chart polyline").count(), 14);
+    await page.locator('[data-action="quota-app"]').first().click();
+    await page.locator("#quota-mib").fill("1");
+    await page.locator("#quota-warning").fill("90");
+    await page.locator('input[name="reset"]').check();
+    await page.waitForTimeout(3500);
+    assert.equal(
+      await page.locator("#quota-mib").inputValue(),
+      "1",
+      "Polling retains the budget draft",
+    );
+    await page
+      .getByRole("button", { name: "Save budget", exact: true })
+      .click();
+    await page
+      .locator("#form-error")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
+    await page.locator("#modal-close").click();
     await page.getByRole("button", { name: "Live logs", exact: false }).click();
     await page
       .locator("#journal-output")
@@ -268,6 +303,7 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       ["cores", "ابزارهای"],
       ["logs", "گزارش"],
       ["help", "راهنمای"],
+      ["traffic", "مصرف"],
     ]) {
       await page.locator(`[data-page="${name}"]`).first().click();
       assert.match(
