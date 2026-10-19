@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splitforge"
-version = "2.4.2"
+version = "2.5.0"
 description = "Per-application Linux network namespace routing with a Textual terminal UI"
 readme = "README.md"
 requires-python = ">=3.10"

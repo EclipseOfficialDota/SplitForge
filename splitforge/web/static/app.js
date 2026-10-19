@@ -84,9 +84,15 @@ function profileName(id) {
 }
 function route(app, interactive = true) {
   const label = `<span>${app.profile_id ? "↗" : "◌"}</span>${e(profileName(app.profile_id))}${interactive ? "<span>⌄</span>" : ""}`;
-  return interactive
+  const current = interactive
     ? `<button type="button" class="route-pill ${app.profile_id ? "" : "direct"}" data-action="route" data-id="${e(app.id)}">${label}</button>`
     : `<span class="route-pill ${app.profile_id ? "" : "direct"}">${label}</span>`;
+  return (
+    current +
+    (app.failover_enabled
+      ? `<div class="field-hint">Auto: ${e(profileName(app.primary_profile_id))} → ${e(profileName(app.backup_profile_id))}<br>Failover restarts this app</div>`
+      : "")
+  );
 }
 function appIdentity(app) {
   const shell = app.name.endsWith(".sh"),
@@ -449,9 +455,12 @@ function addProfile(draft = {}) {
 function routeModal(id) {
   const app = state.apps.find((a) => a.id === id);
   if (!app) return;
+  const primary = app.failover_enabled
+    ? app.primary_profile_id
+    : app.profile_id;
   openModal(
     `Assign route · ${app.name}`,
-    `<form id="action-form" data-type="app.bind" class="stack"><input type="hidden" name="id" value="${e(id)}"><div><label for="route-profile">Network path</label><select id="route-profile" name="profile_id"><option value="" ${!app.profile_id ? "selected" : ""}>◌ Direct server internet</option>${state.profiles.map((p) => `<option value="${e(p.id)}" ${p.id === app.profile_id ? "selected" : ""}>${e(p.name)} · ${e(p.protocol.toUpperCase())} · ${p.active ? "active" : "auto start"}</option>`).join("")}</select></div><div class="notice">This stops and restarts the managed workload. Open connections and process memory will be lost.</div><div class="notice green">✓ Kill switch and encrypted DNS remain enforced for tunnel assignments.</div>${formActions("Apply & restart")}</form>`,
+    `<form id="action-form" data-type="app.bind" class="stack"><input type="hidden" name="id" value="${e(id)}"><div><label for="route-profile">Primary network path</label><select id="route-profile" name="profile_id"><option value="" ${!primary ? "selected" : ""}>◌ Direct server internet</option>${state.profiles.map((p) => `<option value="${e(p.id)}" ${p.id === primary ? "selected" : ""}>${e(p.name)} · ${e(p.protocol.toUpperCase())} · ${p.active ? "active" : "auto start"}</option>`).join("")}</select></div><div><label for="route-backup">Automatic backup tunnel (optional)</label><select id="route-backup" name="backup_profile_id" ${!primary ? "disabled" : ""}><option value="">Disabled · keep this single route</option>${state.profiles.map((p) => `<option value="${e(p.id)}" ${p.id === primary ? "disabled" : ""} ${app.failover_enabled && p.id === app.backup_profile_id ? "selected" : ""}>${e(p.name)} · ${e(p.protocol.toUpperCase())}</option>`).join("")}</select><p class="field-hint">Two failed health checks trigger a restart into the backup. If both fail, the app stays stopped. Direct is never an automatic fallback. A healthy backup is retained until you reapply the primary or the backup fails.</p></div><div class="notice">This stops and restarts the managed workload. Automatic failover also restarts it: open connections and process memory will be lost.</div><div class="notice green">✓ Kill switch and encrypted DNS remain enforced for tunnel assignments.</div>${formActions("Apply & restart")}</form>`,
     "APP ROUTER / REASSIGN",
   );
 }
@@ -538,9 +547,7 @@ document.addEventListener("click", async (event) => {
     else if (action === "app-toggle") {
       const app = state.apps.find((a) => a.id === id);
       await sendAction(
-        app.running
-          ? { action: "app.stop", id }
-          : { action: "app.bind", id, profile_id: app.profile_id || "" },
+        app.running ? { action: "app.stop", id } : { action: "app.start", id },
       );
     } else if (["profile.start", "profile.test"].includes(action))
       await sendAction({ action, id });
@@ -635,6 +642,14 @@ document.addEventListener("submit", async (event) => {
   }
 });
 document.addEventListener("change", (event) => {
+  if (event.target.id === "route-profile" && $("#route-backup")) {
+    const backup = $("#route-backup"),
+      primary = event.target.value;
+    backup.disabled = !primary;
+    for (const option of backup.options)
+      option.disabled = Boolean(option.value && option.value === primary);
+    if (!primary || backup.value === primary) backup.value = "";
+  }
   if (event.target.id === "profile-method") {
     $("#profile-import-fields").hidden = event.target.value !== "import";
     $("#profile-dns-fields").hidden = event.target.value === "import";

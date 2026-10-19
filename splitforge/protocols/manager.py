@@ -311,7 +311,8 @@ class ProtocolManager:
         require_root()
         profile = self.store.profile(name)
         snapshot = self.store.snapshot()
-        if any(a["profile_id"] == profile.id for a in snapshot["apps"].values()) or profile.id in snapshot["users"].values():
+        if any(profile.id in {a.get('profile_id'), a.get('primary_profile_id'), a.get('backup_profile_id')}
+               for a in snapshot["apps"].values()) or profile.id in snapshot["users"].values():
             raise ValueError("Reassign/remove all application and user references first")
         unit = Path("/etc/systemd/system", self._unit(profile))
         if unit.exists():

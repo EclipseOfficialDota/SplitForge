@@ -108,7 +108,9 @@ class Panel:
             "uptime": int(time.time() - psutil.boot_time()), "profiles": profile_rows,
             "apps": [{"id": a.id, "name": a.name, "user": a.user, "cwd": a.cwd, "service": a.service,
                       "command": shlex.join(a.argv), "profile_id": a.profile_id, "enabled": a.enabled,
-                      "running": a.enabled if self.demo else self.runner.running(a)} for a in apps],
+                      "running": a.enabled if self.demo else self.runner.running(a),
+                      "primary_profile_id": a.primary_profile_id, "backup_profile_id": a.backup_profile_id,
+                      "failover_enabled": a.failover_enabled} for a in apps],
             "components": components}
 
     def submit(self, data):
@@ -116,7 +118,7 @@ class Panel:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
                 "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
-                "profile.dns", "app.add", "app.bind", "app.stop", "app.remove", "cores.install", "diagnostics.run"}:
+                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "cores.install", "diagnostics.run"}:
             raise ValueError("Unknown action")
         with self.lock:
             if self.busy:
@@ -210,7 +212,15 @@ class Panel:
             report("Application registered; assign a route to start it")
         elif action == "app.bind":
             profile = self._text(data, "profile_id", limit=80)
-            self.runner.bind(target, profile or None)
+            backup = self._text(data, 'backup_profile_id', limit=80)
+            updated = self.runner.bind(target, profile or None, backup_profile_name=backup or None)
+            if backup:
+                report('Automatic primary/backup policy saved; switches restart this application.')
+                if not self.runner.running(updated):
+                    report('Workload remains stopped; the monitor will retry the configured tunnels. Check Live logs.')
+        elif action == 'app.start':
+            binding = self.store.app(target)
+            self.runner.bind(binding.id, binding.profile_id, preserve_failover=True)
         elif action in {"app.stop", "app.remove"}:
             getattr(self.runner, action.split(".")[1])(target)
         elif action == "cores.install":

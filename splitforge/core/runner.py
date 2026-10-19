@@ -79,15 +79,56 @@ class Runner:
     def running(self, app: AppBinding) -> bool:
         return run(["systemctl", "is-active", "--quiet", self.unit(app)], check=False).returncode == 0
 
-    def bind(self, app_id: str, profile_name: str | None, *, start: bool = True):
+    def bind(self, app_id: str, profile_name: str | None, *, start: bool = True,
+             backup_profile_name: str | None = None, preserve_failover: bool = False, expected: AppBinding | None = None):
         require_root()
+        current = self.store.app(app_id)
+        if expected is not None and current != expected:
+            raise RuntimeError('Application assignment changed during the health check; retry with current policy')
+        self._validate_service(current)
         profile = self.store.profile(profile_name) if profile_name else None
+        backup = self.store.profile(backup_profile_name) if backup_profile_name else None
+        primary = profile
+        if backup:
+            if preserve_failover:
+                raise ValueError('Choose either a new backup policy or preservation of the existing policy')
+            if not profile or profile.id == backup.id:
+                raise ValueError('Choose two distinct tunnel profiles; Direct cannot be a failover target')
+            from splitforge.core.failover import ensure_service
+            ensure_service(self.store)
+        fallback = backup
+        if preserve_failover and current.failover_enabled:
+            if expected is None:
+                from splitforge.core.failover import ensure_service
+                ensure_service(self.store)
+            other = (current.backup_profile_id if profile and profile.id == current.primary_profile_id
+                     else current.primary_profile_id)
+            fallback = self.store.profile(other)
+        deferred = False
         if profile:
-            self.manager.start(profile.id)
+            try:
+                self.manager.start(profile.id)
+            except Exception:
+                if not fallback:
+                    raise
+                try:
+                    self.manager.start(fallback.id)
+                    from splitforge.core.diagnostics import namespace_checks
+                    if not all(ok for _, ok, _ in namespace_checks(self.manager, fallback)):
+                        raise RuntimeError('Backup namespace guard/DNS/route checks failed')
+                    self.manager.test(fallback.id, persist=False)
+                    profile = fallback
+                except Exception:
+                    # Persist a fail-closed unit and intent so the monitor can recover later.
+                    deferred = True
         with self.store.operation(app_id):
             old = self.store.app(app_id)
+            if expected is not None and old != expected:
+                raise RuntimeError('Application assignment changed during the health check; retry with current policy')
             self._validate_service(old)
-            updated = dataclasses.replace(old, profile_id=profile.id if profile else None, enabled=start)
+            policy = ({} if preserve_failover else {'primary_profile_id': primary.id if backup else None,
+                      'backup_profile_id': backup.id if backup else None, 'failover_enabled': bool(backup)})
+            updated = dataclasses.replace(old, profile_id=profile.id if profile else None, enabled=start, **policy)
             content = self._render(updated, profile)
             path = self._path(old)
             previous = path.read_text() if path.exists() else None
@@ -102,7 +143,7 @@ class Runner:
                 else:
                     atomic_secret(path, content, 0o644)
                 run(["systemctl", "daemon-reload"])
-                if start:
+                if start and not deferred:
                     run(["systemctl", "start", self.unit(updated)])
                 if not updated.service:
                     run(["systemctl", "enable" if start else "disable", self.unit(updated)])
@@ -124,6 +165,15 @@ class Runner:
                 self.store.save_app(old)
                 raise RuntimeError("Swap failed; previous assignment restored") from failure
         return updated
+
+    def suspend(self, app: AppBinding):
+        """Fail closed without clearing the saved enabled/failover intent."""
+        require_root()
+        with self.store.operation(app.id):
+            if self.store.app(app.id) != app:
+                raise RuntimeError('Application policy changed; suspension cancelled')
+            self._validate_service(app)
+            run(['systemctl', 'stop', self.unit(app)])
 
     def stop(self, app_id: str):
         require_root()

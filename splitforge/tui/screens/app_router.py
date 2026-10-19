@@ -32,7 +32,12 @@ class RouteSelector(ModalScreen):
             yield Static("Applying stops and restarts this workload. Open connections will close.", classes="subtitle")
             options = [("◌ Direct server internet", "direct")]
             options.extend((f"{flag(p['country'])} {p['name']} · {p['protocol']} · {p['exit_ip'] or 'not tested'}", p["id"]) for p in self.profiles)
-            yield Select(options, value=self.binding.profile_id or "direct", allow_blank=False, id="route-choice")
+            primary = self.binding.primary_profile_id if self.binding.failover_enabled else self.binding.profile_id
+            yield Select(options, value=primary or "direct", allow_blank=False, id="route-choice")
+            yield Label('Automatic backup tunnel · switching restarts the program')
+            backups = [('Disabled · single route', 'disabled')] + [(p['name'], p['id']) for p in self.profiles if p['id'] != primary]
+            yield Select(backups, value=self.binding.backup_profile_id or 'disabled', allow_blank=False,
+                         disabled=not primary, id='backup-choice')
             yield Checkbox("Kill switch · required for tunnel profiles", value=True, disabled=True)
             yield Checkbox("Isolated encrypted DNS · required for tunnel profiles", value=True, disabled=True)
             with Horizontal(classes="dialog-actions"):
@@ -44,9 +49,22 @@ class RouteSelector(ModalScreen):
         event.stop()
         if event.button.id == "apply-route":
             value = self.query_one("#route-choice", Select).value
-            self.dismiss(None if value == "direct" else str(value))
+            backup = self.query_one('#backup-choice', Select).value
+            self.dismiss({'profile': None if value == 'direct' else str(value),
+                          'backup': None if value == 'direct' or backup == 'disabled' else str(backup)})
         else:
             self.dismiss(False)
+
+    @on(Select.Changed, '#route-choice')
+    def primary_changed(self, event):
+        if not self.query('#backup-choice'):
+            return
+        backup = self.query_one('#backup-choice', Select)
+        previous = backup.value
+        options = [('Disabled · single route', 'disabled')] + [(p['name'], p['id']) for p in self.profiles if p['id'] != event.value]
+        backup.set_options(options)
+        backup.value = previous if previous in {value for _, value in options} and event.value != 'direct' else 'disabled'
+        backup.disabled = event.value == 'direct'
 
 
 class AppForm(ModalScreen):
@@ -132,7 +150,8 @@ class RouterView(Vertical):
         binding = self.selected()
         if binding:
             self.app.push_screen(RouteSelector(binding, self.app.data["profiles"]),
-                lambda value: self.app.perform(lambda: self.app.runner.bind(binding.id, value), "Route applied") if value is not False else None)
+                lambda value: self.app.perform(lambda: self.app.runner.bind(binding.id, value['profile'], backup_profile_name=value['backup']),
+                                              "Route/policy applied; failover restarts this workload") if value is not False else None)
 
     @on(DataTable.RowSelected, "#router-table")
     def row(self):

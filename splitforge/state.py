@@ -92,11 +92,24 @@ class AppBinding:
     kill_switch: bool = True
     isolate_dns: bool = True
     enabled: bool = False
+    primary_profile_id: str | None = None
+    backup_profile_id: str | None = None
+    failover_enabled: bool = False
 
     def __post_init__(self):
         checked_id(self.id)
         if self.profile_id is not None:
             checked_id(self.profile_id)
+        for profile_id in (self.primary_profile_id, self.backup_profile_id):
+            if profile_id is not None:
+                checked_id(profile_id)
+        if not isinstance(self.failover_enabled, bool):
+            raise ValueError('Failover enabled must be a boolean')
+        if self.failover_enabled and (not self.primary_profile_id or not self.backup_profile_id
+                                     or self.primary_profile_id == self.backup_profile_id
+                                     or self.profile_id not in {self.primary_profile_id, self.backup_profile_id}
+                                     or not self.kill_switch or not self.isolate_dns):
+            raise ValueError('Automatic failover requires distinct primary/backup tunnels and a tunneled assignment')
         if not self.name.strip() or any(ord(c) < 32 for c in self.name):
             raise ValueError("Invalid application name")
         if not self.service and not self.argv:
@@ -111,6 +124,10 @@ class AppBinding:
         if self.service and (not re.fullmatch(r"[A-Za-z0-9_@.:-]+\.service", self.service)
                              or self.service.startswith("-")):
             raise ValueError("Invalid systemd service name")
+
+    @property
+    def profile_references(self):
+        return {value for value in (self.profile_id, self.primary_profile_id, self.backup_profile_id) if value}
 
 
 class StateStore:
@@ -155,7 +172,7 @@ class StateStore:
                 raise ValueError("Profile key mismatch")
         for key, item in data["apps"].items():
             app = AppBinding(**item)
-            if app.id != key or (app.profile_id and app.profile_id not in data["profiles"]):
+            if app.id != key or not app.profile_references.issubset(data['profiles']):
                 raise ValueError("Invalid application reference")
         slots = [p["slot"] for p in data["profiles"].values()]
         if 0 in slots or len(slots) != len(set(slots)):
@@ -225,7 +242,7 @@ class StateStore:
         AppBinding(**asdict(app))
         with self.operation():
             data = self._read()
-            if app.profile_id and app.profile_id not in data["profiles"]:
+            if not app.profile_references.issubset(data['profiles']):
                 raise ValueError("Unknown assigned profile")
             data["apps"][app.id] = asdict(app)
             self._write(data)
@@ -233,7 +250,7 @@ class StateStore:
     def delete_profile(self, profile_id: str):
         with self.operation():
             data = self._read()
-            if any(a["profile_id"] == profile_id for a in data["apps"].values()) or profile_id in data["users"].values():
+            if any(profile_id in AppBinding(**a).profile_references for a in data["apps"].values()) or profile_id in data["users"].values():
                 raise ValueError("Profile is still assigned")
             del data["profiles"][checked_id(profile_id)]
             self._write(data)

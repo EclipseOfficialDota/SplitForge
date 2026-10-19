@@ -18,6 +18,15 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.5.0: **90 tests passed with root integration enabled** (88.028
+seconds), plus the desktop/mobile browser suite, CI-policy lint, package build
+and documentation checks. Real systemd tests verify the persistent monitor,
+primary-to-backup process restart and namespace identity, verified backup egress,
+both-down suspension with saved recovery intent, and unchanged host main routes.
+Unit tests additionally cover startup failures, stale-probe/manual-stop races,
+protected profile references and explicit Direct policy removal. Browser and
+Textual checks exercise the primary/backup selector and Direct clearing it.
+
 Version 2.4.2: **77 tests passed with root integration enabled**, plus the browser
 suite, lint, build and documentation checks. Local HTTP download tests cover 503
 retry, alternative source, actual streamed percentage/unknown-size progress,

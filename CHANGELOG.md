@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.5.0 — 2026-10-19
+
+- Per-application primary/backup tunnel policy in App Router and `bind --backup`.
+  A separate permanent systemd monitor checks namespace guards/DNS/routes and
+  real egress, switches after two failures, and restarts inside the backup.
+- Both tunnels down leaves the workload stopped with its saved intent retained;
+  Direct is never selected automatically. Healthy backups remain selected to
+  avoid flapping; reapply the primary explicitly when desired.
+- Concurrent manual stops/reassignments supersede stale health probes. Backup
+  references protect profiles from deletion. Upgrade stop/restore and diagnostics
+  preserve policy and quiesce the monitor during maintenance.
+
 ## 2.4.2 — 2026-10-18
 
 - Late refresh/journal callbacks tolerate dashboard shutdown; a real shutdown

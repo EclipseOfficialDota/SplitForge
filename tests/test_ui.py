@@ -11,6 +11,27 @@ from splitforge.tui.screens.help import CoreChecklist, GuideModal, LESSONS
 
 
 class InterfaceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_route_selector_preserves_backup_and_direct_clears_it(self):
+        from splitforge.state import AppBinding
+        from textual.widgets import Select
+        app = SplitForgeApp(demo=True)
+        binding = AppBinding('policy-test', ['/usr/bin/sleep', '300'], profile_id='de000001',
+                             primary_profile_id='de000001', backup_profile_id='ab000002', failover_enabled=True)
+        profiles = [{'id': value, 'name': name, 'country': '', 'protocol': 'socks5', 'exit_ip': ''}
+                    for value, name in [('de000001', 'primary'), ('ab000002', 'backup')]]
+        results = []
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(RouteSelector(binding, profiles), results.append)
+            await pilot.pause()
+            self.assertEqual(app.screen.query_one('#backup-choice', Select).value, 'ab000002')
+            app.screen.query_one('#route-choice', Select).value = 'direct'
+            await pilot.pause()
+            self.assertTrue(app.screen.query_one('#backup-choice', Select).disabled)
+            await pilot.click('#apply-route')
+            await pilot.pause()
+            self.assertEqual(results, [{'profile': None, 'backup': None}])
+
     async def test_late_refresh_and_log_callbacks_ignore_unmounted_dashboard(self):
         app = SplitForgeApp(demo=True)
         async with app.run_test(size=(120, 40)) as pilot:

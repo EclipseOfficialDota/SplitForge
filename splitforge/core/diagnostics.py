@@ -123,7 +123,7 @@ def diagnose(store, manager, runner, *, repair=False, report=print, route_baseli
                 if healthy:
                     for app in apps:
                         if app.enabled and app.profile_id == profile.id:
-                            runner.bind(app.id, profile.id)
+                            runner.bind(app.id, profile.id, preserve_failover=True)
             record('tunnel', profile.name, healthy, 'Tunnel lifecycle and namespace checks passed.' if healthy else
                    'Tunnel is unavailable or its isolated network configuration is inconsistent.',
                    'Check required cores/provider configuration; use repair to rebuild only this managed tunnel.', repaired=fixed)
@@ -153,7 +153,7 @@ def diagnose(store, manager, runner, *, repair=False, report=print, route_baseli
                 running = runner.running(app)
                 fixed = False
                 if repair and not running:
-                    runner.bind(app.id, app.profile_id)
+                    runner.bind(app.id, app.profile_id, preserve_failover=True)
                     fixed = running = runner.running(app)
                 record('application', app.name, running, 'Enabled workload is running.' if running else 'Enabled workload is stopped.',
                        'Inspect the application journal, executable path, Linux user and working directory.', repaired=fixed)

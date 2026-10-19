@@ -192,10 +192,14 @@ def app_list(ctx: typer.Context):
 
 @app.command("bind")
 def bind(ctx: typer.Context, target: str, profile: str = typer.Option("direct", "--profile"),
-         stopped: bool = typer.Option(False, "--stopped")):
+         stopped: bool = typer.Option(False, "--stopped"),
+         backup: str | None = typer.Option(None, "--backup", help="Automatic failover to this tunnel; never Direct.")):
     store, _, runner = objects(ctx)
-    runner.bind(app_by_name(store, target).id, None if profile == "direct" else profile, start=not stopped)
-    typer.echo("Assignment applied" + ("; application left stopped" if stopped else "; application restarted"))
+    updated = runner.bind(app_by_name(store, target).id, None if profile == "direct" else profile, start=not stopped,
+                backup_profile_name=backup)
+    status = ('application left stopped' if stopped else 'application restarted' if runner.running(updated)
+              else 'application is stopped; inspect logs; configured failover intent is retained')
+    typer.echo('Assignment applied; ' + status)
 
 
 @apps.command("stop")
@@ -355,7 +359,10 @@ def restore(ctx: typer.Context):
             manager.start(profile.id)
     for binding in bindings:
         if binding.enabled:
-            runner.bind(binding.id, binding.profile_id)
+            runner.bind(binding.id, binding.profile_id, preserve_failover=True)
+    if any(binding.failover_enabled for binding in bindings):
+        from splitforge.core.failover import ensure_service
+        ensure_service(store)
     typer.echo("Enabled workload assignments restored")
 
 
@@ -363,6 +370,8 @@ def restore(ctx: typer.Context):
 def stop_all(ctx: typer.Context, preserve: bool = typer.Option(False, "--preserve", help="Keep boot/assignment intent for upgrade restore.")):
     require_root()
     store, manager, runner = objects(ctx)
+    from splitforge.core.failover import unit_name
+    run(['systemctl', 'stop', unit_name(store)], check=False, timeout=310)
     for binding in store.apps():
         if preserve:
             run(["systemctl", "stop", runner.unit(binding)], check=False)

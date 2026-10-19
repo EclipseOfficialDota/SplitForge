@@ -152,6 +152,44 @@ restart every app stopped with it; use App Router deliberately.
 
 ## Jobs, refresh and failure behavior
 
+### Automatic application tunnel backup
+
+In App Router, open the route selector, choose a primary tunnel and an optional
+**Automatic backup tunnel**, then apply. Direct has no backup setting. Selecting
+a backup installs/enables a separate systemd monitor for this state file; it
+continues after closing the browser, web panel or SSH connection.
+
+```sh
+sudo splitforge bind telegram-bot --profile wg-europe --backup vless-backup
+# Explicitly choose a single route again, removing the automatic policy:
+sudo splitforge bind telegram-bot --profile wg-europe
+```
+
+The monitor scans enabled policies at 15-second intervals and requires two
+consecutive failed health checks. A health check verifies lifecycle, namespace
+guard/route/DNS configuration and real namespace HTTPS/DNS egress. Network probe
+timeouts and backup startup add to detection/switch time; this is not an instant
+packet-level or connection-preserving migration.
+
+If the primary cannot start when the policy is first applied, a validated backup
+can be used immediately. If both startup attempts fail, a stopped, tunneled unit
+and the enabled policy are saved for later recovery; the previous Direct service
+is not retained as the completed assignment.
+
+Failover stops and restarts the managed program in the selected backup namespace;
+open connections and memory are lost. The backup starts automatically if needed.
+If neither configured tunnel is healthy, the app stays stopped with its enabled
+intent retained, allowing later recovery. The monitor never selects Direct.
+An explicitly stopped app is ignored. Stopping a tunnel while its app policy is
+enabled can trigger failover; stop the app or remove its policy to prevent that.
+
+A healthy backup is kept to avoid repeated restarts. Reapply the primary in the
+selector to move back, or it can become the fallback if the backup later fails.
+Manual assignment/stop changes override stale probe results. Both primary and
+backup references must be removed before deleting a profile. Upgrade maintenance
+stops the monitor before stopping workloads; `restore` reinstates saved policies.
+Monitor messages are available in Live logs under `splitforge-failover-*` units.
+
 ### Health checks and repair
 
 In **Live logs**, choose **Check health** for a read-only scan or **Check & repair**

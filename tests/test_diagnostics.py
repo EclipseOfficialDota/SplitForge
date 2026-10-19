@@ -75,7 +75,7 @@ class DiagnosticTests(unittest.TestCase):
         sequence = []
         manager.stop.side_effect = lambda value: sequence.append(('stop', value))
         manager.start.side_effect = lambda value: sequence.append(('start', value))
-        runner.bind.side_effect = lambda app_id, profile_id: sequence.append(('bind', app_id, profile_id))
+        runner.bind.side_effect = lambda app_id, profile_id, **kwargs: sequence.append(('bind', app_id, profile_id))
         with patch('splitforge.core.diagnostics.namespace_checks', side_effect=[
                 [('dns', False, 'Wrong resolver')], [('dns', True, '')]]):
             result = diagnose(store, manager, runner, repair=True, report=lambda message: None)

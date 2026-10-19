@@ -63,6 +63,12 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       .getByRole("heading", { name: "Assign route · telegram_bot.py" })
       .waitFor();
     await page.locator("#route-profile").selectOption("");
+    assert.equal(await page.locator("#route-backup").isDisabled(), true);
+    await page.locator("#route-profile").selectOption("de000001");
+    await page.locator("#route-backup").selectOption("ab000002");
+    assert.equal(await page.locator("#route-backup").inputValue(), "ab000002");
+    await page.locator("#route-profile").selectOption("");
+    assert.equal(await page.locator("#route-backup").inputValue(), "");
     await page.getByRole("button", { name: "Apply & restart" }).click();
     await page
       .locator("#form-error")
