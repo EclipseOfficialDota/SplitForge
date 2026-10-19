@@ -186,6 +186,22 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       .filter({ hasText: "Read-only demo" })
       .waitFor();
     await page.locator("#modal-close").click();
+    await page.locator('[data-page="profiles"]').first().click();
+    await page.locator('[data-action="speed-profile"]').first().click();
+    await page.locator("#speed-download").fill("2.5");
+    await page.locator("#speed-upload").fill("1");
+    await page.locator("#modal-language-button").click();
+    assert.match(await page.locator("#modal").innerText(), /محدودیت سرعت/);
+    assert.equal(await page.locator("#speed-download").inputValue(), "2.5");
+    await page.locator("#modal-language-button").click();
+    await page
+      .getByRole("button", { name: "Save speed limits", exact: true })
+      .click();
+    await page
+      .locator("#form-error")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
+    await page.locator("#modal-close").click();
     await page.getByRole("button", { name: "Live logs", exact: false }).click();
     await page
       .locator("#journal-output")

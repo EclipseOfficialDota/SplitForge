@@ -53,6 +53,11 @@ class TrafficLinuxTests(unittest.TestCase):
                             time.sleep(0.1)
                     profile = manager.import_profile(f'socks5://127.0.0.1:{port}', name='meter-tunnel')
                     store.save_profile(fixture.configure(profile))
+                    from splitforge.core.speed import set_limits
+                    # Persist both limits before activation; startup must apply
+                    # the saved tc policy before admitting managed workloads.
+                    meter.set_quota('profiles', profile.id, 16 * 1048576)
+                    set_limits(store, profile.id, 8000000, 8000000)
                     script = base / 'client.py'
                     script.write_text('''import ssl,sys,time,urllib.request
 from pathlib import Path
@@ -71,6 +76,8 @@ time.sleep(120)
                         apps.append(app)
                         runner.bind(app.id, profile.id)
                     self.assertEqual(run(['systemctl', 'is-active', unit_name(store)]).stdout.strip(), 'active')
+                    qdiscs = json.loads(manager.netns.command(profile, 'tc', '-j', 'qdisc', 'show', 'dev', profile.interface).stdout)
+                    self.assertTrue(any(q['kind'] == 'tbf' for q in qdiscs))
                     expected_namespace = Path('/run/netns', profile.namespace).stat().st_ino
                     for app in apps:
                         pid = run(['systemctl', 'show', runner.unit(app), '-p', 'MainPID', '--value']).stdout.strip()

@@ -294,6 +294,10 @@ class Runner:
         profile = self.store.profile(profile_name)
         if profile.protocol in {"wireguard", "openvpn"}:
             raise ValueError("Use namespace execution for WireGuard/OpenVPN")
+        from splitforge.core.traffic import TrafficStore
+        limits = TrafficStore(self.store).snapshot()['profiles'].get(profile.id, {})
+        if limits.get('quota') is not None or limits.get('download_bps', 0) or limits.get('upload_bps', 0):
+            raise ValueError('Limited profiles require namespace execution; remove --proxychains')
         self.manager.start(profile.id)
         path = Path("/run/splitforge", profile.id, "proxychains.conf")
         atomic_secret(path, f"strict_chain\nproxy_dns\n[ProxyList]\nsocks5 {profile.gateway} 1080\n", 0o644)

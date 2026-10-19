@@ -207,6 +207,21 @@ This is an LD_PRELOAD-style TCP convenience mode, not isolated networking.
 Static binaries, nonintercepted calls, application UDP and DNS behavior must not
 be assumed protected. Prefer `execute()` for the namespace workflow.
 
+## Profile speed and volume limits
+
+Use `splitforge.core.speed.set_limits(store, profile_id, download_bps, upload_bps)`
+for live/persistent shared profile caps (integer bits/second; zero disables that
+direction). `TrafficStore(store).set_quota('profiles', profile_id, byte_limit)`
+sets its separate volume budget; `None` disables the budget. Mutations require
+Linux root. New/stopped profiles can be configured before startup.
+
+The authenticated, CSRF-protected web job endpoint accepts `traffic.speed` with
+`id`, integer `download` and `upload`, and `traffic.quota` with `kind='profiles'`,
+`id`, `limit` (bytes or null), `warning` (1–99) and optional boolean `reset`.
+Both speed fields must be explicit, including zero when disabling a direction.
+See [Traffic](TRAFFIC.md) for enforcement scope and short-burst/volume overshoot
+limits. Host-side proxychains execution rejects limited profiles.
+
 ## NetNS and low-level helpers
 
 `NetNS` exposes `exists`, `create`, `command`, `guard`, `activate`, `destroy`

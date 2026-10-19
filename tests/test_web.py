@@ -141,6 +141,11 @@ class WebTests(unittest.TestCase):
         self.panel._dispatch({'action': 'traffic.quota', 'kind': 'apps', 'id': 'aa000001', 'limit': 1048576,
                               'warning': 90, 'reset': True}, Mock())
         self.panel.traffic.set_quota.assert_called_once_with('apps', 'aa000001', 1048576, warning=90, reset=True)
+        with patch('splitforge.core.speed.set_limits') as speed:
+            self.panel._dispatch({'action': 'traffic.speed', 'id': 'aa000001', 'download': 2000000, 'upload': 1000000}, Mock())
+            speed.assert_called_once_with(self.panel.store, 'aa000001', 2000000, 1000000)
+        with self.assertRaisesRegex(ValueError, 'both download'):
+            self.panel._dispatch({'action': 'traffic.speed', 'id': 'aa000001', 'download': 2000000}, Mock())
         with self.assertRaisesRegex(ValueError, 'explicit disabled'):
             self.panel._dispatch({'action': 'traffic.quota', 'kind': 'apps', 'id': 'aa000001'}, Mock())
         self.panel.manager = Mock()

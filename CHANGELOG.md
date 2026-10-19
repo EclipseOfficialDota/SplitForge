@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.9.0 — 2026-10-19
+
+- Shared per-profile upload shaping and download policing, live changes and
+  persistent caps restored before managed workloads start. Separate Mbps controls
+  in profile/traffic cards and `traffic speed` CLI with explicit decimal kbit/s.
+- Volume budgets can be saved for stopped/new profiles. Profile cards expose
+  budget controls alongside speed settings; English/Persian labels and help.
+- Failed speed changes restore prior rules; failed recovery disables the tunnel
+  interface. Limited profiles reject new host-side proxychains launches, which
+  bypass namespace interface accounting. Existing such workloads must be stopped
+  and relaunched using namespace execution.
+- Real isolated TCP transfers verify both directions, policy persistence,
+  live rollback/removal, failed-recovery shutdown and unchanged host main routes.
+
 ## 2.8.1 — 2026-10-19
 
 - Generated web units explicitly use null stdin and avoid the newer foreground

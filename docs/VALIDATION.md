@@ -18,6 +18,19 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.9.0: **108 tests passed with root integration enabled** (156.597
+seconds). A final four-test speed run passed after adding the limited-proxychains
+guard and clearer kernel errors (6.028 seconds). Real isolated TCP transfers
+verify the 1 Mbit/s upload shaper and 2 Mbit/s download policer, saved offline
+settings, live policy replacement/removal, rollback after an injected failure
+and disabled-interface recovery when both attempts fail. The host main routes
+remain unchanged. Existing real tunnel integration also starts a proxy profile
+with saved speed and volume caps and verifies the kernel qdisc before continuing
+independent app quota/failover checks. Final desktop/mobile browser checks cover
+profile controls, speed drafts surviving EN/FA switches, translated labels and
+read-only demo rejection. Lint, documentation syntax and package builds passed.
+These are controlled local Linux tests, not measured public-provider throughput.
+
 Version 2.8.1: **10 web setup tests passed**, including real root systemd and
 TLS proxy checks (2.273 seconds). Generated services use null standard input
 without the newer `--foreground` option, so the same web service can also run

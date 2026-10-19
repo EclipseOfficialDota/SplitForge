@@ -45,6 +45,9 @@ def validate_data(data):
             if row['baseline'] > row['rx'] + row['tx']:
                 raise ValueError('Invalid quota baseline')
             quota = row.get('quota')
+            from splitforge.core.speed import validate_rate
+            for field in ('download_bps', 'upload_bps'):
+                validate_rate(row.get(field, 0))
             if quota is not None and (type(quota) is not int or not 1 <= quota < 2**63):
                 raise ValueError('Invalid traffic quota')
             if type(row.get('warn_percent')) is not int or not 1 <= row['warn_percent'] <= 99:
@@ -304,13 +307,13 @@ class TrafficStore:
                 self.record(kind, identifier, self.profile_sample(manager, profile))
             except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
                 self.record(kind, identifier, None, error=str(error), active=manager.netns.exists(profile))
-        if limit is not None and not self.snapshot()[kind].get(identifier, new_row())['supported']:
+        if kind == 'apps' and limit is not None and not self.snapshot()[kind].get(identifier, new_row())['supported']:
             raise ValueError('Start this target and verify independent counters before setting a quota')
         ensure_service(self.store)
         with self.locked():
             data = self.snapshot()
             row = data[kind].setdefault(identifier, new_row())
-            if limit is not None and not row['supported']:
+            if kind == 'apps' and limit is not None and not row['supported']:
                 raise ValueError('Start this target and verify independent counters before setting a quota')
             if reset or row['quota'] is None:
                 row['baseline'] = row['rx'] + row['tx']

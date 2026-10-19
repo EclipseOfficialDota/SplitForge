@@ -3,6 +3,22 @@
 // selected files, focus, open dialogs and unmodified technical/user-supplied data.
 (() => {
   const fa = {
+    "Download cap": "سقف سرعت دانلود",
+    "Upload cap": "سقف سرعت آپلود",
+    "Kernel traffic control failed; verify tc, TBF and u32/police support": "اعمال کنترل سرعت در کرنل ناموفق بود؛ وجود tc و پشتیبانی TBF و u32/police را بررسی کنید",
+    "Speed limit recovery failed; tunnel interface was disabled. Restart the profile.": "بازیابی محدودیت سرعت ناموفق بود و رابط تونل غیرفعال شد. کانفیگ را دوباره راه‌اندازی کنید.",
+    "Limited profiles require namespace execution; remove --proxychains": "کانفیگ دارای محدودیت باید در namespace اجرا شود؛ گزینهٔ --proxychains را حذف کنید",
+    "Profile speed limits": "محدودیت سرعت کانفیگ",
+    "Speed limit": "محدودیت سرعت",
+    "Download limit (Mbps, 0 unlimited)":
+      "سقف دانلود (مگابیت بر ثانیه؛ صفر نامحدود)",
+    "Upload limit (Mbps, 0 unlimited)":
+      "سقف آپلود (مگابیت بر ثانیه؛ صفر نامحدود)",
+    "Save speed limits": "ذخیرهٔ محدودیت سرعت",
+    "Speed limits saved": "محدودیت سرعت ذخیره شد",
+    "Invalid speed limit": "محدودیت سرعت نامعتبر است",
+    "Shared by all applications using this profile. Applied live and after restart. Download policing drops excess packets; UDP may lose data. Short bursts are allowed. This limits delivered tunnel traffic, not the provider's billed incoming bytes.":
+      "این سقف میان تمام برنامه‌های متصل به کانفیگ مشترک است و زنده و پس از راه‌اندازی مجدد اعمال می‌شود. بسته‌های دانلود مازاد حذف می‌شوند؛ UDP ممکن است داده از دست بدهد. جهش کوتاه مجاز است. این تنظیم ترافیک تحویلی تونل را محدود می‌کند، نه حجم ورودی محاسبه‌شده توسط ارائه‌دهنده.",
     "SplitForge · Control plane": "SplitForge · پنل مدیریت",
     "⌘ splitforge — control plane": "⌘ splitforge — پنل مدیریت",
     "SECURE LOCAL SESSION": "نشست محلی امن",
@@ -345,7 +361,8 @@
     routing: "مسیریابی",
   };
   Object.assign(fa, {
-    'Specify a traffic limit or an explicit disabled value': 'مقدار سقف مصرف یا غیرفعال‌سازی آن را صریحاً مشخص کنید',
+    "Specify a traffic limit or an explicit disabled value":
+      "مقدار سقف مصرف یا غیرفعال‌سازی آن را صریحاً مشخص کنید",
     "COLLECTOR ACTIVE": "پایشگر فعال",
     "COLLECTOR STOPPED": "پایشگر متوقف",
     "Traffic budget usage": "میزان استفاده از سقف مصرف",

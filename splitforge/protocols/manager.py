@@ -400,6 +400,10 @@ class ProtocolManager:
                     self._wait_interface(profile)
                 else:
                     self._proxy(profile, runtime)
+                limits = TrafficStore(self.store).snapshot()['profiles'].get(profile.id, {})
+                if limits.get('download_bps', 0) or limits.get('upload_bps', 0):
+                    from splitforge.core.speed import apply
+                    apply(profile, limits.get('download_bps', 0), limits.get('upload_bps', 0), netns=self.netns)
                 self._service(profile, "dns", [sys.executable, "-m", "splitforge.core.netns", "dns",
                                                profile.doh_url, profile.doh_ip,
                                                *(["--ca-file", profile.tls_ca_file] if profile.tls_ca_file else [])], namespace=True)

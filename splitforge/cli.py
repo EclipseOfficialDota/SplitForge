@@ -52,6 +52,17 @@ def traffic_status(ctx: typer.Context):
     typer.echo(json.dumps(TrafficStore(objects(ctx)[0]).snapshot(), indent=2))
 
 
+@traffic_app.command('speed')
+def traffic_speed(ctx: typer.Context, profile: str,
+                  download: int = typer.Option(0, '--download-kbps', min=0, max=100000000),
+                  upload: int = typer.Option(0, '--upload-kbps', min=0, max=100000000)):
+    """Set shared profile download/upload limits; decimal kbit/s, 0 unlimited."""
+    from splitforge.core.speed import set_limits
+    store = objects(ctx)[0]
+    set_limits(store, store.profile(profile).id, download * 1000, upload * 1000)
+    typer.echo('Speed limits saved; active tunnels changed live, stopped tunnels apply on startup')
+
+
 @traffic_app.command('quota')
 def traffic_quota(ctx: typer.Context, target: str,
                   kind: str = typer.Option('app', '--kind', help='app or profile'),

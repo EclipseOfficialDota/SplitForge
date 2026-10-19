@@ -146,7 +146,7 @@ class Panel:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
                 "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
-                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run", "backup.export", "backup.restore", "traffic.enable", "traffic.quota"}:
+                "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run", "backup.export", "backup.restore", "traffic.enable", "traffic.quota", "traffic.speed"}:
             raise ValueError("Unknown action")
         with self.lock:
             if self.busy:
@@ -205,6 +205,13 @@ class Panel:
                 raise ValueError('Specify a traffic limit or an explicit disabled value')
             self.traffic.set_quota(kind, target, data.get('limit'), warning=data.get('warning', 80), reset=data.get('reset', False))
             report('Traffic budget saved; exhausted targets stay stopped until explicitly started')
+            return
+        if action == 'traffic.speed':
+            from splitforge.core.speed import set_limits
+            if 'download' not in data or 'upload' not in data:
+                raise ValueError('Specify both download and upload speed limits')
+            set_limits(self.store, target, data['download'], data['upload'])
+            report('Speed limits saved')
             return
         if action in {'backup.export', 'backup.restore'}:
             from splitforge.core.backup import LIMIT, capture, decrypt, encrypt, restore_backup

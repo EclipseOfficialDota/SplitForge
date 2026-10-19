@@ -195,7 +195,7 @@ function profilesPage() {
     ) +
     `<div class="toolbar"><input class="search" id="search" type="search" placeholder="Search profiles or protocols…" aria-label="Search profiles" value="${e(search)}"><small>Active does not mean freshly tested</small></div>` +
     (profiles.length
-      ? `<div class="profile-grid">${profiles.map((p) => `<article class="profile-card"><div class="profile-card-top"><span class="protocol">${e(p.protocol.toUpperCase())}</span>${badge(p.active)}</div><h2>${flag(p.country)} ${e(p.name)}</h2><div class="mono">ns-${e(p.id)}</div><dl class="profile-details"><div><dt>Last exit address</dt><dd>${e(p.exit_ip || "Not tested")}</dd></div><div><dt>HTTPS elapsed</dt><dd>${p.latency_ms === null ? "—" : `${Math.round(p.latency_ms)} ms`}</dd></div><div><dt>Received</dt><dd>${bytes(p.bandwidth?.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(p.bandwidth?.tx)}</dd></div></dl><div class="row-actions">${button(p.active ? "Stop" : "Start", p.active ? "profile.stop" : "profile.start", p.id, "", state.busy)}${button("Test egress", "profile.test", p.id, "", state.busy || !p.active)}${button("Edit source", "profile-edit", p.id, "", state.busy || p.active)}${button("Remove", "profile-remove", p.id, "danger", state.busy)}</div></article>`).join("")}</div>`
+      ? `<div class="profile-grid">${profiles.map((p) => `<article class="profile-card"><div class="profile-card-top"><span class="protocol">${e(p.protocol.toUpperCase())}</span>${badge(p.active)}</div><h2>${flag(p.country)} ${e(p.name)}</h2><div class="mono">ns-${e(p.id)}</div><dl class="profile-details"><div><dt>Last exit address</dt><dd>${e(p.exit_ip || "Not tested")}</dd></div><div><dt>HTTPS elapsed</dt><dd>${p.latency_ms === null ? "—" : `${Math.round(p.latency_ms)} ms`}</dd></div><div><dt>Received</dt><dd>${bytes(p.bandwidth?.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(p.bandwidth?.tx)}</dd></div></dl>${speedSummary(p.id)}<div class="row-actions">${button(p.active ? "Stop" : "Start", p.active ? "profile.stop" : "profile.start", p.id, "", state.busy)}${button("Test egress", "profile.test", p.id, "", state.busy || !p.active)}${button("Edit source", "profile-edit", p.id, "", state.busy || p.active)}${button("Speed limit", "speed-profile", p.id, "", state.busy)}${button("Set budget", "quota-profile", p.id, "", state.busy)}${button("Remove", "profile-remove", p.id, "danger", state.busy)}</div></article>`).join("")}</div>`
       : empty(
           "No matching profiles",
           "Import a URI or a server-side configuration file.",
@@ -271,7 +271,7 @@ function trafficCard(kind, target) {
       row.available &&
       (kind === "apps" ? target.running : target.active) &&
       Date.now() / 1000 - row.updated < 20;
-  return `<article class="profile-card traffic-card"><div class="profile-card-top"><span class="protocol">${kind === "apps" ? "APPLICATION" : "TUNNEL"}</span><span class="badge ${row?.blocked ? "offline" : ""}">${row?.blocked ? "BUDGET BLOCKED" : row?.available ? "COUNTERS LIVE" : "LAST READING"}</span></div><h2 data-no-translate>${e(target.name)}</h2><p class="field-hint">${kind === "apps" ? "Independent service kernel counters" : "Shared tunnel interface counters"}</p>${supported ? `<div class="traffic-total mono">${bytes(row.rx + row.tx)}</div>${trafficGraph(row.history)}<dl class="profile-details"><div><dt>Received</dt><dd>${bytes(row.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(row.tx)}</dd></div><div><dt>Budget usage</dt><dd>${bytes(used)} / ${quota ? bytes(quota) : "Unlimited"}</dd></div></dl>${quota ? `<progress class="download-progress" max="100" value="${percent.toFixed(2)}" aria-label="Traffic budget usage"></progress>` : ""}${row.warned ? '<div class="notice">Traffic warning threshold reached</div>' : ""}` : '<div class="traffic-empty">No verified counter reading yet</div>'}${row?.error ? `<p class="field-hint">${e(row.error)}</p>` : ""}<div class="row-actions">${button("Set budget", kind === "apps" ? "quota-app" : "quota-profile", target.id, "", state.busy || (!supported && !quota))}</div>${row?.updated ? `<small class="field-hint">Last sampled ${e(new Date(row.updated * 1000).toLocaleString())}</small>` : ""}</article>`;
+  return `<article class="profile-card traffic-card"><div class="profile-card-top"><span class="protocol">${kind === "apps" ? "APPLICATION" : "TUNNEL"}</span><span class="badge ${row?.blocked ? "offline" : ""}">${row?.blocked ? "BUDGET BLOCKED" : row?.available ? "COUNTERS LIVE" : "LAST READING"}</span></div><h2 data-no-translate>${e(target.name)}</h2><p class="field-hint">${kind === "apps" ? "Independent service kernel counters" : "Shared tunnel interface counters"}</p>${supported ? `<div class="traffic-total mono">${bytes(row.rx + row.tx)}</div>${trafficGraph(row.history)}<dl class="profile-details"><div><dt>Received</dt><dd>${bytes(row.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(row.tx)}</dd></div><div><dt>Budget usage</dt><dd>${bytes(used)} / ${quota ? bytes(quota) : "Unlimited"}</dd></div></dl>${quota ? `<progress class="download-progress" max="100" value="${percent.toFixed(2)}" aria-label="Traffic budget usage"></progress>` : ""}${row.warned ? '<div class="notice">Traffic warning threshold reached</div>' : ""}` : '<div class="traffic-empty">No verified counter reading yet</div>'}${row?.error ? `<p class="field-hint">${e(row.error)}</p>` : ""}${kind === "profiles" ? speedSummary(target.id) : ""}<div class="row-actions">${button("Set budget", kind === "apps" ? "quota-app" : "quota-profile", target.id, "", state.busy || (kind === "apps" && !supported && !quota))}${kind === "profiles" ? button("Speed limit", "speed-profile", target.id, "", state.busy) : ""}</div>${row?.updated ? `<small class="field-hint">Last sampled ${e(new Date(row.updated * 1000).toLocaleString())}</small>` : ""}</article>`;
 }
 function trafficPage() {
   const data = state.traffic || { apps: {}, profiles: {}, events: [] };
@@ -303,6 +303,23 @@ function trafficPage() {
             .join("")
         : "<p>No budget alerts</p>"
     }</div></section>${operations()}`
+  );
+}
+function speedSummary(id) {
+  const row = state.traffic?.profiles?.[id] || {};
+  const cap = (value) =>
+    value
+      ? `<span data-no-translate>${value / 1000000} Mbps</span>`
+      : "Unlimited";
+  return `<dl class="profile-details"><div><dt>Download cap</dt><dd>${cap(row.download_bps)}</dd></div><div><dt>Upload cap</dt><dd>${cap(row.upload_bps)}</dd></div></dl>`;
+}
+function speedModal(id) {
+  const target = state.profiles.find((item) => item.id === id);
+  if (!target) return;
+  const row = state.traffic?.profiles?.[id] || {};
+  openModal(
+    "Profile speed limits",
+    `<form id="speed-form" class="stack"><input type="hidden" name="id" value="${e(id)}"><p data-no-translate>${e(target.name)}</p><label for="speed-download">Download limit (Mbps, 0 unlimited)</label><input id="speed-download" name="download" type="number" min="0" max="100000" step="0.001" value="${(row.download_bps || 0) / 1000000}" required><label for="speed-upload">Upload limit (Mbps, 0 unlimited)</label><input id="speed-upload" name="upload" type="number" min="0" max="100000" step="0.001" value="${(row.upload_bps || 0) / 1000000}" required><p class="notice">Shared by all applications using this profile. Applied live and after restart. Download policing drops excess packets; UDP may lose data. Short bursts are allowed. This limits delivered tunnel traffic, not the provider's billed incoming bytes.</p>${formActions("Save speed limits")}</form>`,
   );
 }
 function quotaModal(kind, id) {
@@ -629,6 +646,7 @@ document.addEventListener("click", async (event) => {
     id = target.dataset.id;
   try {
     if (action === "add-app") addApp();
+    else if (action === "speed-profile") speedModal(id);
     else if (action === "quota-app") quotaModal("apps", id);
     else if (action === "quota-profile") quotaModal("profiles", id);
     else if (action === "traffic-enable")
@@ -733,6 +751,7 @@ document.addEventListener("submit", async (event) => {
       "backup-export-form",
       "backup-restore-form",
       "quota-form",
+      "speed-form",
     ].includes(formId)
   )
     return;
@@ -741,6 +760,24 @@ document.addEventListener("submit", async (event) => {
   if (submit) submit.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (formId === "speed-form") {
+      const download = Math.round(Number(data.download) * 1000000);
+      const upload = Math.round(Number(data.upload) * 1000000);
+      if (
+        ![download, upload].every(
+          (value) =>
+            Number.isSafeInteger(value) && value >= 0 && value <= 100000000000,
+        )
+      )
+        throw new Error("Invalid speed limit");
+      await sendAction({
+        action: "traffic.speed",
+        id: data.id,
+        download,
+        upload,
+      });
+      return;
+    }
     if (formId === "quota-form") {
       const mib = Number(data.mib),
         limit = Math.round(mib * 1048576),
