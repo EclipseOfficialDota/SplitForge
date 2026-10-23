@@ -6,7 +6,7 @@ if [[ ${EUID} -ne 0 ]]; then
     echo 'Run with sudo bash install-relay.sh' >&2
     exit 1
 fi
-version='2.10.1'
+version='2.10.2'
 prefix='/opt/splitforge-relay'
 release="https://github.com/EclipseOfficialDota/SplitForge/releases/download/v${version}"
 apt-get update

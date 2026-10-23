@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.10.2 — 2026-10-24
+
+- Stage verified local .debs into apt's archive cache before --no-download,
+  fixing installation on clean systems without package lists.
+- Build on version tags and keep releases in draft until all eight offline
+  installations and asset uploads succeed. No incomplete release is published.
+
 ## 2.10.1 — 2026-10-24
 
 - Every release now builds eight complete offline ZIP assets: Ubuntu 22.04/24.04

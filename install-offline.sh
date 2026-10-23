@@ -32,6 +32,10 @@ if [[ -x $prefix/venv/bin/splitforge ]]; then
 fi
 export DEBIAN_FRONTEND=noninteractive
 # Only local .debs: never update package lists or fall back to a mirror.
+install -d -m 0755 /var/cache/apt/archives/partial
+# --no-download also disables apt's normal staging of local file arguments.
+# Populate its cache first so dpkg receives absolute, available archive paths.
+cp -- "$folder"/debs/*.deb /var/cache/apt/archives/
 apt-get -y --no-download --no-install-recommends install "$folder"/debs/*.deb
 install -d -m 0755 -- "$prefix"
 python3 -m venv "$prefix/venv"

@@ -1,8 +1,8 @@
 name: Release packages
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -15,7 +15,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -34,12 +34,12 @@ jobs:
             runner: ubuntu-24.04-arm
         arch: [amd64, arm64]
     env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
       IMAGE: ${{ matrix.image }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
           persist-credentials: false
       - name: Build complete native offline bundle
         run: |
@@ -85,12 +85,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -117,7 +117,12 @@ jobs:
       - name: Attach verified distributions to the release
         env:
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "$TAG" dist/*.whl dist/*.tar.gz dist/*.zip dist/SHA256SUMS --clobber
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --draft --title "SplitForge $TAG" --generate-notes
+          fi
+          gh release upload "$TAG" dist/*.whl dist/*.tar.gz dist/*.zip dist/SHA256SUMS --clobber
       - name: Publish distribution archive to GitHub Packages
         env:
           REGISTRY_TOKEN: ${{ github.token }}
@@ -136,3 +141,7 @@ jobs:
             --label "org.opencontainers.image.description=SplitForge Python distributions; archive only, not a runnable container" \
             -t "$image" .
           docker push "$image"
+      - name: Publish the fully tested release
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$TAG" --draft=false --latest
