@@ -45,6 +45,7 @@ COMPONENTS = {
     "wireguard": (("wg",), "WireGuard profiles / پروفایل وایرگارد"),
     "openvpn": (("openvpn",), "OpenVPN profiles / پروفایل اوپن وی پی ان"),
     "dnstt-client": (("dnstt-client",), "DNSTT DNS tunnel / تونل دی ان اس"),
+    "noizdns-client": (("noizdns-client",), "NoizDNS DNS tunnel / تونل نویز دی‌ان‌اس"),
     "slipstream-client": (("slipstream-client",), "Slipstream DNS tunnel / تونل دی ان اس"),
     "proxychains4": (("proxychains4",), "Optional TCP wrapper / حالت اختیاری TCP"),
 }
@@ -55,7 +56,7 @@ def component_plan(names) -> list[str]:
     selected = set(names)
     if selected - COMPONENTS.keys():
         raise ValueError("Unknown dependency selection")
-    if selected & {"xray", "tun2socks", "dnstt-client", "slipstream-client"}:
+    if selected & {"xray", "tun2socks", "dnstt-client", "slipstream-client", "noizdns-client"}:
         selected.update({"xray", "tun2socks"})
     if selected:
         selected.add("base")
@@ -69,6 +70,10 @@ def component_installed(name: str) -> bool:
 
 DNSTT_REVISION = "17aa1fed864cd5493e3d09a14df1b8b5cc1df123"
 DNSTT_SHA256 = "d68bb4838133aa363436117c8a80d8899146a122f24a61aae1cd417d7913b9dc"
+NOIZDNS_REVISION = 'f76c585093c7c31e9be6c10a1b425be033eb4938'
+NOIZDNS_SHA256 = '5f0bdfca204c28008b5cdc830a519a88f31f9d4ed5d4f9e2a189a0dd1431c974'
+NOIZDNS_DNSTT_REVISION = '51bdba3948d44b3175bc88ea40b2116bb9daff07'
+NOIZDNS_DNSTT_SHA256 = 'a470f719058cd888e9702dd2a14fb6e06c8f3e7d65be6f5f71e8339427447f9a'
 GO_VERSION = "go1.26.1"
 GO_DIGESTS = {"x86_64": ("amd64", "031f088e5d955bab8657ede27ad4e3bc5b7c1ba281f05f245bcc304f327c987a"),
               "aarch64": ("arm64", "a290581cfe4fe28ddd737dde3095f3dbeb7f2e4065cab4eae44dfc53b760c2f7")}
@@ -213,16 +218,27 @@ def unpack_verified_tar(data: bytes, base: Path):
                 raise RuntimeError("Unsupported archive entry")
 
 
-def install_dnstt(destination: Path, *, progress=None) -> str:
-    url = f"https://codeload.github.com/Mygod/dnstt/tar.gz/{DNSTT_REVISION}"
-    data = download(url, DNSTT_SHA256, 5_000_000, progress=progress)
+def install_dnstt(destination: Path, *, progress=None, name='dnstt-client') -> str:
+    if name not in {'dnstt-client', 'dnstt-server', 'noizdns-client', 'noizdns-server'}:
+        raise ValueError('Unknown DNS tunnel build target')
+    revision, digest, repository, package = (NOIZDNS_REVISION, NOIZDNS_SHA256, 'anonvector/noizdns', './cmd/' + name) if name.startswith('noizdns-') else (DNSTT_REVISION, DNSTT_SHA256, 'Mygod/dnstt', './' + name)
+    url = f"https://codeload.github.com/{repository}/tar.gz/{revision}"
+    data = download(url, digest, 5_000_000, progress=progress)
     with tempfile.TemporaryDirectory(prefix="splitforge-dnstt-") as directory:
         base = Path(directory).resolve()
         unpack_verified_tar(data, base)
         roots = [p.parent for p in base.glob("*/go.mod")]
         if len(roots) != 1:
             raise RuntimeError("Unexpected DNSTT source layout")
-        binary = base / "dnstt-client"
+        if name.startswith('noizdns-'):
+            dependency = download(f'https://codeload.github.com/anonvector/dnstt/tar.gz/{NOIZDNS_DNSTT_REVISION}',
+                                  NOIZDNS_DNSTT_SHA256, 5_000_000, progress=progress)
+            unpack_verified_tar(dependency, base / 'companion')
+            companions = list((base / 'companion').glob('*/go.mod'))
+            if len(companions) != 1:
+                raise RuntimeError('Unexpected NoizDNS companion source layout')
+            shutil.move(str(companions[0].parent), str(base / 'dnstt'))
+        binary = base / name
         compiler = shutil.which("go")
         version = run([compiler, "version"], check=False).stdout if compiler else ""
         match = re.search(r"go(\d+)\.(\d+)(?:\.(\d+))?", version)
@@ -236,9 +252,9 @@ def install_dnstt(destination: Path, *, progress=None) -> str:
             compiler = str(base / "go/bin/go")
         proxy = os.environ.get("GOPROXY", "https://proxy.golang.org|direct")
         if progress:
-            progress({'asset': 'dnstt-client', 'phase': 'building pinned source', 'percent': None})
+            progress({'asset': name, 'phase': 'building pinned source', 'percent': None})
         result = run(["env", "GOTOOLCHAIN=local", "CGO_ENABLED=0", f"GOPROXY={proxy}", compiler,
-                      "-C", str(roots[0]), "build", "-trimpath", "-o", str(binary), "./dnstt-client"], timeout=600, check=False)
+                      "-C", str(roots[0]), "build", "-trimpath", "-o", str(binary), package], timeout=600, check=False)
         if result.returncode:
             from splitforge.core.netns import atomic_secret
             log = Path("/var/log/splitforge-install.log")
@@ -252,14 +268,16 @@ def install_dnstt(destination: Path, *, progress=None) -> str:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.chmod(temporary, 0o755)
-            os.replace(temporary, destination / "dnstt-client")
+            os.replace(temporary, destination / name)
         finally:
             Path(temporary).unlink(missing_ok=True)
-    return f"Built dnstt-client from SHA-256-verified source {DNSTT_REVISION[:12]}"
+    return f"Built {name} from SHA-256-verified source {revision[:12]}"
 
 
 def install(name: str, destination: Path = Path("/usr/local/bin"), *, progress=None) -> str:
     require_root()
+    if name == 'noizdns-client':
+        return install_dnstt(destination, progress=progress, name=name)
     if name == "dnstt-client":
         return install_dnstt(destination, progress=progress)
     if name in PACKAGES:

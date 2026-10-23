@@ -18,6 +18,31 @@ platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin
 
 ## Environment
 
+Version 2.10.0: **117 tests passed with root integration enabled** (202.433
+seconds). The single-stream test transfers byte-exact random data in both
+directions over one versus five independently throttled 20 KiB/s TCP paths and
+requires more than 2.5x aggregate gain. It also cuts a path while that path holds
+unacknowledged application data, verifies retransmission and tests authentication,
+private-target refusal, reference safety and relay-restart reset semantics.
+A final four-test transport run passed (20.543 seconds), including the fix that
+completed handshakes do not consume pending-handshake capacity during reconnects.
+
+Real root/systemd integration starts DNSTT, NoizDNS and Slipstream servers and
+clients on controlled local DNS endpoints, authenticates three paths into one
+bonded TUN profile, probes DNS/verified HTTPS from a bound root workload, stops
+one member and confirms continuing egress plus unchanged host main routes.
+This validates actual protocol adapters without a public recursive resolver;
+the independent-rate benchmark uses controlled TCP shims, not five public DNS
+providers. The TLS probe/exit response is the existing synthetic fixture.
+
+NoizDNS and its companion DNSTT were built from the pinned verified source;
+the existing verified offline Go compiler cache was used after an official
+toolchain download returned HTTP 403. The real unprivileged systemd relay with
+credential mounting passed an authenticated readiness probe. Browser tests cover
+EN/FA aggregation forms, preserved drafts, member selection, read-only refusal
+and secret-free URLs. No customer tunnel credentials or public-provider speed
+results are claimed by these controlled checks.
+
 Version 2.9.0: **108 tests passed with root integration enabled** (156.597
 seconds). A final four-test speed run passed after adding the limited-proxychains
 guard and clearer kernel errors (6.028 seconds). Real isolated TCP transfers

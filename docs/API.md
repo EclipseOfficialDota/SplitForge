@@ -222,6 +222,22 @@ Both speed fields must be explicit, including zero when disabling a direction.
 See [Traffic](TRAFFIC.md) for enforcement scope and short-burst/volume overshoot
 limits. Host-side proxychains execution rejects limited profiles.
 
+## Aggregation profiles
+
+`manager.bond(name, member_ids, relay_host, relay_port, token)` saves an aggregate
+profile after validating member references and ensuring they have no TUN-based
+budgets that their proxy transport would bypass. Member profiles must be
+independent TCP proxies; nested groups and WireGuard/OpenVPN members are rejected.
+Use ordinary `manager.start`, app binding and removal for the output. Removing
+a referenced member is rejected before stopping its services.
+
+The web job `profile.bond` accepts `name`, `members` (2–8 distinct IDs),
+`relay_host`, integer `relay_port`, and a private 64-hex `token`. Session/CSRF and
+serialized-job protection apply. State snapshots expose path counts, not tokens.
+`dns_tunnel` additionally accepts `protocol='noizdns'` and optional `username`
+and `password` for the remote SOCKS backend. See [Bonding](BONDING.md) for the
+destination installation and reliability/throughput limits.
+
 ## NetNS and low-level helpers
 
 `NetNS` exposes `exists`, `create`, `command`, `guard`, `activate`, `destroy`

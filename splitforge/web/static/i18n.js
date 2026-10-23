@@ -3,11 +3,33 @@
 // selected files, focus, open dialogs and unmodified technical/user-supplied data.
 (() => {
   const fa = {
+    "Create bonded output": "ساخت خروجی تجمیعی",
+    "Save bonded output": "ذخیرهٔ خروجی تجمیعی",
+    "Select 2–8 independent tunnel profiles. A single TCP connection is striped across their paths.":
+      "۲ تا ۸ کانفیگ تونل مستقل انتخاب کنید. داده‌های یک اتصال TCP بین این مسیرها تقسیم می‌شوند.",
+    "Relay address on destination server": "آدرس سرویس تجمیع در سرور مقصد",
+    "Relay port": "پورت سرویس تجمیع",
+    "Private relay join token": "توکن خصوصی اتصال به سرویس تجمیع",
+    "Authenticated paths": "مسیرهای احرازشده",
+    "Select 2–8 member profiles": "۲ تا ۸ کانفیگ عضو انتخاب کنید",
+    "Destination relay installation": "نصب سرویس تجمیع در مقصد",
+    "Remote SOCKS username (optional)": "نام کاربری SOCKS مقصد (اختیاری)",
+    "Remote SOCKS password (optional)": "رمز SOCKS مقصد (اختیاری)",
+    "NoizDNS wizard": "راهنمای NoizDNS",
+    "Bonded output saved; install the destination relay before starting it":
+      "خروجی تجمیعی ذخیره شد؛ پیش از اجرا، سرویس تجمیع را در سرور مقصد نصب کنید",
+    "Read the private token on the destination server from /etc/splitforge/relay.json and enter it above. Do not share the token publicly.":
+      "توکن خصوصی را در سرور مقصد از فایل /etc/splitforge/relay.json بخوانید و اینجا وارد کنید. توکن را عمومی منتشر نکنید.",
+    "Install the relay on the server where your DNS tunnels terminate. Shared server/domain alone does not aggregate speed. The relay is authenticated and listens only on loopback by default. TCP only; independent path capacity is required for a speed gain. Set quotas on the bonded output, not member transports.":
+      "سرویس تجمیع را روی سروری نصب کنید که تونل‌های DNS به آن می‌رسند. سرور یا دامنهٔ مشترک به‌تنهایی سرعت را جمع نمی‌کند. سرویس احراز هویت دارد و به‌صورت پیش‌فرض فقط روی loopback گوش می‌دهد. تنها TCP پشتیبانی می‌شود و افزایش سرعت به ظرفیت مستقل مسیرها نیاز دارد. سقف مصرف را روی خروجی تجمیعی تنظیم کنید، نه اعضای آن.",
     "Download cap": "سقف سرعت دانلود",
     "Upload cap": "سقف سرعت آپلود",
-    "Kernel traffic control failed; verify tc, TBF and u32/police support": "اعمال کنترل سرعت در کرنل ناموفق بود؛ وجود tc و پشتیبانی TBF و u32/police را بررسی کنید",
-    "Speed limit recovery failed; tunnel interface was disabled. Restart the profile.": "بازیابی محدودیت سرعت ناموفق بود و رابط تونل غیرفعال شد. کانفیگ را دوباره راه‌اندازی کنید.",
-    "Limited profiles require namespace execution; remove --proxychains": "کانفیگ دارای محدودیت باید در namespace اجرا شود؛ گزینهٔ --proxychains را حذف کنید",
+    "Kernel traffic control failed; verify tc, TBF and u32/police support":
+      "اعمال کنترل سرعت در کرنل ناموفق بود؛ وجود tc و پشتیبانی TBF و u32/police را بررسی کنید",
+    "Speed limit recovery failed; tunnel interface was disabled. Restart the profile.":
+      "بازیابی محدودیت سرعت ناموفق بود و رابط تونل غیرفعال شد. کانفیگ را دوباره راه‌اندازی کنید.",
+    "Limited profiles require namespace execution; remove --proxychains":
+      "کانفیگ دارای محدودیت باید در namespace اجرا شود؛ گزینهٔ --proxychains را حذف کنید",
     "Profile speed limits": "محدودیت سرعت کانفیگ",
     "Speed limit": "محدودیت سرعت",
     "Download limit (Mbps, 0 unlimited)":

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.10.0 — 2026-10-23
+
+- Real multi-path TCP aggregation: stripe each stream over 2–8 independent proxy
+  members, with authenticated encrypted framing, bounded reorder/ack windows,
+  retransmission after path loss and explicit connection reset on relay restart.
+- Create a bonded output in the English/Persian web panel and bind apps normally.
+  Live authenticated-path counts; private join token, CLI and separate loopback
+  destination relay installer with unprivileged systemd credentials.
+- Native NoizDNS client adapter and pinned SHA-256-verified source/companion build;
+  optional remote SOCKS credentials for DNS tunnel profiles.
+- Protect member references and quota integrity; apply limits to the shared
+  output and remove groups before members during backup/rollback cleanup.
+- Real lab checks cover a single stream over five rate-limited paths and a
+  managed root application over actual DNSTT + NoizDNS + Slipstream cores.
+
 ## 2.9.0 — 2026-10-19
 
 - Shared per-profile upload shaping and download policing, live changes and

@@ -131,7 +131,7 @@ def _clear(store, manager, runner):
         runner.remove(app.id)
     for user in list(store.snapshot()['users']):
         runner.bind_user(user, None)
-    for profile in store.profiles():
+    for profile in sorted(store.profiles(), key=lambda profile: profile.protocol != 'bond'):
         manager.remove(profile.id)
 
 

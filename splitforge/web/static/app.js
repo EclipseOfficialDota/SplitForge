@@ -141,7 +141,7 @@ function overview() {
     header(
       "Your apps. <span>Your network.</span>",
       "Every workload, exactly where it belongs. Your host keeps its existing route.",
-      `<button class="button" data-action="add-app">＋ Register app</button><button class="button primary" data-action="add-profile">＋ Import profile</button>`,
+      `<button class="button" data-action="add-app">＋ Register app</button><button class="button primary" data-action="add-profile">＋ Import profile</button><button class="button" data-action="add-bond">Create bonded output</button>`,
       "WORKSPACE / OVERVIEW",
     ) +
     `<div class="metrics">
@@ -190,12 +190,12 @@ function profilesPage() {
     header(
       "Tunnel <span>profiles.</span>",
       "Multiple protocols. Separate namespaces. A single control plane.",
-      `<button class="button primary" data-action="add-profile">＋ Import profile</button>`,
+      `<button class="button primary" data-action="add-profile">＋ Import profile</button><button class="button" data-action="add-bond">Create bonded output</button>`,
       "WORKSPACE / TUNNELS",
     ) +
     `<div class="toolbar"><input class="search" id="search" type="search" placeholder="Search profiles or protocols…" aria-label="Search profiles" value="${e(search)}"><small>Active does not mean freshly tested</small></div>` +
     (profiles.length
-      ? `<div class="profile-grid">${profiles.map((p) => `<article class="profile-card"><div class="profile-card-top"><span class="protocol">${e(p.protocol.toUpperCase())}</span>${badge(p.active)}</div><h2>${flag(p.country)} ${e(p.name)}</h2><div class="mono">ns-${e(p.id)}</div><dl class="profile-details"><div><dt>Last exit address</dt><dd>${e(p.exit_ip || "Not tested")}</dd></div><div><dt>HTTPS elapsed</dt><dd>${p.latency_ms === null ? "—" : `${Math.round(p.latency_ms)} ms`}</dd></div><div><dt>Received</dt><dd>${bytes(p.bandwidth?.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(p.bandwidth?.tx)}</dd></div></dl>${speedSummary(p.id)}<div class="row-actions">${button(p.active ? "Stop" : "Start", p.active ? "profile.stop" : "profile.start", p.id, "", state.busy)}${button("Test egress", "profile.test", p.id, "", state.busy || !p.active)}${button("Edit source", "profile-edit", p.id, "", state.busy || p.active)}${button("Speed limit", "speed-profile", p.id, "", state.busy)}${button("Set budget", "quota-profile", p.id, "", state.busy)}${button("Remove", "profile-remove", p.id, "danger", state.busy)}</div></article>`).join("")}</div>`
+      ? `<div class="profile-grid">${profiles.map((p) => `<article class="profile-card"><div class="profile-card-top"><span class="protocol">${e(p.protocol.toUpperCase())}</span>${badge(p.active)}</div><h2>${flag(p.country)} ${e(p.name)}</h2><div class="mono">ns-${e(p.id)}</div><dl class="profile-details"><div><dt>Last exit address</dt><dd>${e(p.exit_ip || "Not tested")}</dd></div><div><dt>HTTPS elapsed</dt><dd>${p.latency_ms === null ? "—" : `${Math.round(p.latency_ms)} ms`}</dd></div><div><dt>Received</dt><dd>${bytes(p.bandwidth?.rx)}</dd></div><div><dt>Sent</dt><dd>${bytes(p.bandwidth?.tx)}</dd></div></dl>${p.protocol === "bond" ? `<p><span>Authenticated paths</span>: <span data-no-translate>${p.bond?.paths || 0}</span></p>` : ""}${speedSummary(p.id)}<div class="row-actions">${button(p.active ? "Stop" : "Start", p.active ? "profile.stop" : "profile.start", p.id, "", state.busy)}${button("Test egress", "profile.test", p.id, "", state.busy || !p.active)}${button("Edit source", "profile-edit", p.id, "", state.busy || p.active || p.protocol === "bond")}${button("Speed limit", "speed-profile", p.id, "", state.busy)}${button("Set budget", "quota-profile", p.id, "", state.busy)}${button("Remove", "profile-remove", p.id, "danger", state.busy)}</div></article>`).join("")}</div>`
       : empty(
           "No matching profiles",
           "Import a URI or a server-side configuration file.",
@@ -572,11 +572,21 @@ function addApp(draft = {}) {
     "APPLICATIONS / NEW",
   );
 }
+function bondModal() {
+  const members = state.profiles.filter(
+    (p) => !["bond", "wireguard", "openvpn"].includes(p.protocol),
+  );
+  openModal(
+    "Create bonded output",
+    `<form id="bond-form" class="stack">${field("Profile name", "name", "", "combined-dns")}<p>Select 2–8 independent tunnel profiles. A single TCP connection is striped across their paths.</p><div class="stack">${members.map((p) => `<label class="check-inline"><input type="checkbox" name="member" value="${e(p.id)}"><span data-no-translate>${e(p.name)} (${e(p.protocol)})</span></label>`).join("")}</div>${field("Relay address on destination server", "relay_host", "127.0.0.1")}${field("Relay port", "relay_port", "28443", "28443", "number")}${field("Private relay join token", "token", "", "64 hex characters", "password")}<p class="notice">Install the relay on the server where your DNS tunnels terminate. Shared server/domain alone does not aggregate speed. The relay is authenticated and listens only on loopback by default. TCP only; independent path capacity is required for a speed gain. Set quotas on the bonded output, not member transports.</p><details><summary>Destination relay installation</summary><pre data-no-translate>curl -fsSL https://raw.githubusercontent.com/EclipseOfficialDota/SplitForge/master/install-relay.sh -o /tmp/splitforge-install-relay.sh
+sudo bash /tmp/splitforge-install-relay.sh</pre><p>Read the private token on the destination server from /etc/splitforge/relay.json and enter it above. Do not share the token publicly.</p></details>${formActions("Save bonded output")}</form>`,
+  );
+}
 function addProfile(draft = {}) {
   const method = draft.method || "import";
   openModal(
     draft.id ? "Replace stopped profile" : "Import a tunnel profile",
-    `<form id="action-form" data-type="profile" class="stack"><input type="hidden" name="id" value="${e(draft.id || "")}">${field("Profile name", "name", draft.name, "wg-europe")}<div><label for="profile-method">Import method</label><select id="profile-method" name="method"><option value="import" ${method === "import" ? "selected" : ""}>URI or server-side configuration file</option><option value="dnstt" ${method === "dnstt" ? "selected" : ""}>DNSTT wizard</option><option value="slipstream" ${method === "slipstream" ? "selected" : ""}>Slipstream wizard</option></select></div><div id="profile-import-fields" ${method !== "import" ? "hidden" : ""}>${field("URI or server-side file path", "source", draft.source, "vless://… or /root/profiles/client.conf", "password", false)}<p class="field-hint">Secrets are not saved in your browser. Native imports: .conf / .ovpn / single-outbound .json</p><button class="button" type="button" data-action="browse-profile">Browse server files ↗</button></div><div id="profile-dns-fields" class="stack" ${method === "import" ? "hidden" : ""}>${field("Delegated tunnel domain", "domain", draft.domain, "t.example.com", "text", false)}${field("Resolver", "resolver", draft.resolver, "udp://1.1.1.1:53 (DNSTT) or 1.1.1.1:53 (Slipstream)", "text", false)}${field("DNSTT hex public key", "public_key", draft.public_key, "32-byte public key in hex", "text", false)}${field("Slipstream server certificate path", "certificate", draft.certificate, "/root/server.pem", "text", false)}<p class="field-hint">A compatible remote server targeting SOCKS5 is required. These DNS adapters carry TCP.</p></div><div class="notice">Save does not start a tunnel. Replacing a profile requires it to be stopped and preserves its application assignments.</div>${formActions("Save profile")}</form>`,
+    `<form id="action-form" data-type="profile" class="stack"><input type="hidden" name="id" value="${e(draft.id || "")}">${field("Profile name", "name", draft.name, "wg-europe")}<div><label for="profile-method">Import method</label><select id="profile-method" name="method"><option value="import" ${method === "import" ? "selected" : ""}>URI or server-side configuration file</option><option value="dnstt" ${method === "dnstt" ? "selected" : ""}>DNSTT wizard</option><option value="noizdns" ${method === "noizdns" ? "selected" : ""}>NoizDNS wizard</option><option value="slipstream" ${method === "slipstream" ? "selected" : ""}>Slipstream wizard</option></select></div><div id="profile-import-fields" ${method !== "import" ? "hidden" : ""}>${field("URI or server-side file path", "source", draft.source, "vless://… or /root/profiles/client.conf", "password", false)}<p class="field-hint">Secrets are not saved in your browser. Native imports: .conf / .ovpn / single-outbound .json</p><button class="button" type="button" data-action="browse-profile">Browse server files ↗</button></div><div id="profile-dns-fields" class="stack" ${method === "import" ? "hidden" : ""}>${field("Delegated tunnel domain", "domain", draft.domain, "t.example.com", "text", false)}${field("Resolver", "resolver", draft.resolver, "udp://1.1.1.1:53 (DNSTT) or 1.1.1.1:53 (Slipstream)", "text", false)}${field("DNSTT hex public key", "public_key", draft.public_key, "32-byte public key in hex", "text", false)}${field("Slipstream server certificate path", "certificate", draft.certificate, "/root/server.pem", "text", false)}${field("Remote SOCKS username (optional)", "username", "", "", "text", false)}${field("Remote SOCKS password (optional)", "password", "", "", "password", false)}<p class="field-hint">A compatible remote server targeting SOCKS5 is required. These DNS adapters carry TCP.</p></div><div class="notice">Save does not start a tunnel. Replacing a profile requires it to be stopped and preserves its application assignments.</div>${formActions("Save profile")}</form>`,
     "TUNNELS / CONFIGURATION",
   );
 }
@@ -606,7 +616,13 @@ function selectedCorePlan() {
   );
   if (
     [...selected].some((n) =>
-      ["xray", "tun2socks", "dnstt-client", "slipstream-client"].includes(n),
+      [
+        "xray",
+        "tun2socks",
+        "dnstt-client",
+        "slipstream-client",
+        "noizdns-client",
+      ].includes(n),
     )
   ) {
     selected.add("xray");
@@ -646,6 +662,7 @@ document.addEventListener("click", async (event) => {
     id = target.dataset.id;
   try {
     if (action === "add-app") addApp();
+    else if (action === "add-bond") bondModal();
     else if (action === "speed-profile") speedModal(id);
     else if (action === "quota-app") quotaModal("apps", id);
     else if (action === "quota-profile") quotaModal("profiles", id);
@@ -752,6 +769,7 @@ document.addEventListener("submit", async (event) => {
       "backup-restore-form",
       "quota-form",
       "speed-form",
+      "bond-form",
     ].includes(formId)
   )
     return;
@@ -760,6 +778,20 @@ document.addEventListener("submit", async (event) => {
   if (submit) submit.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(form));
+    if (formId === "bond-form") {
+      const members = new FormData(form).getAll("member");
+      if (members.length < 2 || members.length > 8)
+        throw new Error("Select 2–8 member profiles");
+      await sendAction({
+        action: "profile.bond",
+        name: data.name,
+        members,
+        relay_host: data.relay_host,
+        relay_port: Number(data.relay_port),
+        token: data.token,
+      });
+      return;
+    }
     if (formId === "speed-form") {
       const download = Math.round(Number(data.download) * 1000000);
       const upload = Math.round(Number(data.upload) * 1000000);

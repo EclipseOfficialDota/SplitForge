@@ -205,7 +205,7 @@ class ProtocolManager:
     def dependencies(protocol: str) -> list[str]:
         base = ["ip", "nft", "systemctl", "systemd-run", "sysctl"]
         return base + ({"wireguard": ["wg"], "openvpn": ["openvpn"]}.get(
-            protocol, ["xray", "tun2socks"] + ({"dnstt": ["dnstt-client"], "slipstream": ["slipstream-client"]}.get(protocol, []))))
+            protocol, ["xray", "tun2socks"] + ({"dnstt": ["dnstt-client"], "noizdns": ["noizdns-client"], "slipstream": ["slipstream-client"]}.get(protocol, []))))
 
     def missing(self, protocol: str) -> list[str]:
         return [name for name in self.dependencies(protocol) if not shutil.which(name)]
@@ -250,14 +250,15 @@ class ProtocolManager:
         return self._save_import(profile, replace_id)
 
     def dns_tunnel(self, name: str, protocol: str, domain: str, resolver: str,
-                   *, public_key: str = "", certificate: str = "", replace_id: str | None = None) -> Profile:
+                   *, public_key: str = "", certificate: str = "", replace_id: str | None = None,
+                   username: str = '', password: str = '') -> Profile:
         previous = self.store.profile(replace_id) if replace_id else None
         certificate_text = ""
-        if protocol not in {"dnstt", "slipstream"}:
-            raise ValueError("Expected dnstt or slipstream")
+        if protocol not in {"dnstt", "slipstream", "noizdns"}:
+            raise ValueError("Expected dnstt, noizdns or slipstream")
         if len(domain) > 253 or not re.fullmatch(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}", domain):
             raise ValueError("Invalid tunnel domain")
-        if protocol == "dnstt":
+        if protocol in {"dnstt", "noizdns"}:
             if not public_key and previous and previous.protocol == protocol:
                 public_key = previous.config["public_key"]
             if not re.fullmatch(r"[a-fA-F0-9]{64}", public_key):
@@ -276,7 +277,31 @@ class ProtocolManager:
                 raise ValueError("Slipstream requires a pinned server certificate PEM file")
         config = {"domain": domain, "resolver": resolver, "public_key": public_key,
                   "certificate": certificate_text}
+        if username or password:
+            if not all(isinstance(value, str) and 0 < len(value.encode()) <= 255 and not any(ord(c) < 32 for c in value) for value in (username, password)):
+                raise ValueError('Specify both remote SOCKS username and password (1–255 bytes)')
+            config.update(username=username, password=password)
+        elif previous:
+            for field in ('username', 'password'):
+                if field in previous.config:
+                    config[field] = previous.config[field]
         return self._save_import(Profile(name, protocol, config), replace_id)
+
+    def bond(self, name, members, relay_host, relay_port, token):
+        profile = Profile(name, 'bond', {'members': members, 'relay_host': relay_host, 'relay_port': relay_port, 'token': token})
+        self._check_bond_members(profile)
+        return self._save_import(profile)
+
+    def _check_bond_members(self, profile):
+        from splitforge.core.traffic import TrafficStore
+        meters = TrafficStore(self.store).snapshot()['profiles']
+        for identifier in profile.config['members']:
+            member = self.store.profile(identifier)
+            if member.protocol in {'bond', 'wireguard', 'openvpn'}:
+                raise ValueError('Select independent TCP proxy member profiles')
+            row = meters.get(identifier, {})
+            if row.get('quota') is not None or row.get('upload_bps', 0) or row.get('download_bps', 0):
+                raise ValueError('Set speed and volume limits on the bonded output; member proxy transports bypass their TUN counters')
 
     def _unit(self, profile: Profile) -> str:
         return f"splitforge-profile-{profile.id}.service"
@@ -286,6 +311,17 @@ class ProtocolManager:
         profile = self.store.profile(name)
         from splitforge.core.traffic import TrafficStore, ensure_service, unit_name
         TrafficStore(self.store).guard('profiles', profile.id)
+        if profile.protocol == 'bond':
+            self._check_bond_members(profile)
+            healthy = 0
+            for identifier in profile.config['members']:
+                try:
+                    self.start(identifier)
+                    healthy += 1
+                except (OSError, ValueError, RuntimeError, TimeoutError):
+                    pass
+            if healthy < 2:
+                raise RuntimeError('At least two member tunnel profiles must start before aggregation')
         missing = self.missing(profile.protocol)
         if missing:
             raise RuntimeError("Missing dependencies: " + ", ".join(missing))
@@ -296,6 +332,9 @@ class ProtocolManager:
                    + "ExecStart=" + " ".join(unit_word(a) for a in [*command, "up", profile.id]) + "\n"
                    + "ExecStop=" + " ".join(unit_word(a) for a in [*command, "down", profile.id]) + "\n"
                    + "TimeoutStartSec=150\nTimeoutStopSec=120\n[Install]\nWantedBy=multi-user.target\n")
+        if profile.protocol == 'bond':
+            units = ' '.join(f'splitforge-profile-{key}.service' for key in profile.config['members'])
+            content = content.replace('[Service]\n', f'Wants={units}\nAfter={units}\n[Service]\n', 1)
         # Do not hold the operation lock while a systemd helper acquires it.
         atomic_secret(Path("/etc/systemd/system", self._unit(profile)), content, 0o644)
         run(["systemctl", "daemon-reload"])
@@ -313,6 +352,8 @@ class ProtocolManager:
         """Remove an unreferenced profile and only its owned system resources."""
         require_root()
         profile = self.store.profile(name)
+        if any(profile.id in p.config.get('members', []) for p in self.store.profiles() if p.protocol == 'bond'):
+            raise ValueError('Remove the aggregation group before removing a member profile')
         snapshot = self.store.snapshot()
         if any(profile.id in {a.get('profile_id'), a.get('primary_profile_id'), a.get('backup_profile_id')}
                for a in snapshot["apps"].values()) or profile.id in snapshot["users"].values():
@@ -340,10 +381,10 @@ class ProtocolManager:
             args.extend(f"--property={setting}" for setting in namespace_properties(profile))
         run([*args, "--", *[a.replace("$", "$$") for a in argv]])
 
-    def _wait_listener(self, profile: Profile, role: str, host: str, port: int):
+    def _wait_listener(self, profile: Profile, role: str, host: str, port: int, *, timeout=12):
         """Confirm the listener belongs to our service, avoiding local port races."""
         address = socket.inet_aton(host)[::-1].hex().upper() + f":{port:04X}"
-        deadline = time.monotonic() + 12
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             result = run(["systemctl", "show", f"splitforge-{role}-{profile.id}.service",
                           "--property=MainPID", "--value"], check=False)
@@ -422,14 +463,28 @@ class ProtocolManager:
         raise TimeoutError("Tunnel interface did not become ready")
 
     def _proxy(self, profile: Profile, runtime: Path):
-        udp = profile.protocol not in {"dnstt", "slipstream"}
+        udp = profile.protocol not in {"dnstt", "slipstream", "noizdns", "bond"}
         if not udp:
             config = profile.config
-            if profile.protocol == "dnstt":
+            if profile.protocol == 'bond':
+                self._check_bond_members(profile)
+                with socket.socket() as reservation:
+                    reservation.bind(('127.0.0.1', 0))
+                    port = reservation.getsockname()[1]
+                document = dict(config, members=[{'id': key, 'host': self.store.profile(key).gateway, 'port': 1080} for key in config['members']], listen_port=port, status_path=str(runtime / 'bond.status.json'))
+                path = runtime / 'bond.json'
+                atomic_secret(path, json.dumps(document))
+                self._service(profile, 'transport', [sys.executable, '-m', 'splitforge.core.bond', 'client', '--config', str(path)])
+                self._wait_listener(profile, 'transport', '127.0.0.1', port, timeout=100)
+                outbound = {'protocol': 'socks', 'settings': {'servers': [{'address': '127.0.0.1', 'port': port}]}}
+            elif profile.protocol in {"dnstt", "noizdns"}:
                 resolver = config["resolver"]
                 flag, address = (("-doh", resolver) if resolver.startswith("https://") else
                                  ("-dot", resolver[6:]) if resolver.startswith("tls://") else ("-udp", resolver[6:]))
                 argv = ["dnstt-client", flag, address, "-pubkey", config["public_key"], config["domain"], "127.0.0.1:0"]
+                if profile.protocol == 'noizdns':
+                    argv[0] = 'noizdns-client'
+                    argv[1:1] = ['-noiz']
             else:
                 certificate = runtime / "server.pem"
                 atomic_secret(certificate, config["certificate"])
@@ -437,13 +492,17 @@ class ProtocolManager:
                         "--cert", str(certificate), "--tcp-listen-host", "127.0.0.1", "--tcp-listen-port", "0"]
             # Reserve a local transport port briefly. No server is exposed on a
             # wildcard address. Xray bridges to the remote SOCKS5 endpoint.
-            with socket.socket() as reservation:
-                reservation.bind(("127.0.0.1", 0))
-                port = reservation.getsockname()[1]
-            argv[-1] = f"127.0.0.1:{port}" if profile.protocol == "dnstt" else str(port)
-            self._service(profile, "transport", argv)
-            self._wait_listener(profile, "transport", "127.0.0.1", port)
-            outbound = {"protocol": "socks", "settings": {"servers": [{"address": "127.0.0.1", "port": port}]}}
+            if profile.protocol != 'bond':
+                with socket.socket() as reservation:
+                    reservation.bind(("127.0.0.1", 0))
+                    port = reservation.getsockname()[1]
+                argv[-1] = f"127.0.0.1:{port}" if profile.protocol in {"dnstt", "noizdns"} else str(port)
+                self._service(profile, "transport", argv)
+                self._wait_listener(profile, "transport", "127.0.0.1", port)
+                server = {"address": "127.0.0.1", "port": port}
+                if config.get('username'):
+                    server['users'] = [{'user': config['username'], 'pass': config['password']}]
+                outbound = {"protocol": "socks", "settings": {"servers": [server]}}
         else:
             outbound = profile.config["outbound"]
         # Native configs never supply host routing, inbounds or bypass rules.
@@ -514,10 +573,19 @@ class ProtocolManager:
     def status(self, name: str) -> dict:
         profile = self.store.profile(name)
         active = run(["systemctl", "is-active", "--quiet", self._unit(profile)], check=False).returncode == 0
-        return {"id": profile.id, "name": profile.name, "active": active,
+        status = {"id": profile.id, "name": profile.name, "active": active,
                 "namespace": self.netns.exists(profile), "exit_ip": profile.exit_ip,
                 "latency_ms": profile.latency_ms,
                 "bandwidth": self.netns.bandwidth(profile) if self.netns.exists(profile) else {"rx": 0, "tx": 0}}
+        if profile.protocol == 'bond':
+            path = Path('/run/splitforge', profile.id, 'bond.status.json')
+            try:
+                document = json.loads(path.read_text())
+                if time.time() - document['updated'] < 10:
+                    status['bond'] = document
+            except (OSError, ValueError, KeyError):
+                pass
+        return status
 
 
 if __name__ == "__main__":

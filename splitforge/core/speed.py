@@ -56,6 +56,8 @@ def set_limits(store, identifier, download, upload):
     meter = TrafficStore(store)
     with store.operation(), meter.locked():
         profile = store.profile(identifier)
+        if (download or upload) and any(p.protocol == 'bond' and profile.id in p.config['members'] for p in store.profiles()):
+            raise ValueError('Set speed limits on the bonded output, not its member proxy transports')
         data = meter.snapshot()
         row = data['profiles'].setdefault(profile.id, new_row())
         previous = row.get('download_bps', 0), row.get('upload_bps', 0)

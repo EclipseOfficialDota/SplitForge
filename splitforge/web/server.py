@@ -145,7 +145,7 @@ class Panel:
         if self.demo:
             raise PermissionError("Read-only demo: no server configuration was changed")
         if not isinstance(data, dict) or not isinstance(data.get("action"), str) or data.get("action") not in {
-                "profile.import", "profile.dns-tunnel", "profile.start", "profile.stop", "profile.test", "profile.remove",
+                "profile.import", "profile.dns-tunnel", "profile.bond", "profile.start", "profile.stop", "profile.test", "profile.remove",
                 "profile.dns", "app.add", "app.bind", "app.start", "app.stop", "app.remove", "app.test", "cores.install", "diagnostics.run", "backup.export", "backup.restore", "traffic.enable", "traffic.quota", "traffic.speed"}:
             raise ValueError("Unknown action")
         with self.lock:
@@ -193,6 +193,15 @@ class Panel:
     def _dispatch(self, data, report):
         action = data["action"]
         target = self._text(data, "id", limit=80)
+        if action == 'profile.bond':
+            members = data.get('members')
+            if not isinstance(members, list) or not all(isinstance(key, str) for key in members):
+                raise ValueError('Select member tunnel profiles')
+            self.manager.bond(self._text(data, 'name', limit=80), members,
+                              self._text(data, 'relay_host', limit=253), data.get('relay_port'),
+                              self._text(data, 'token', limit=64))
+            report('Bonded output saved; install the destination relay before starting it')
+            return
         if action == 'traffic.enable':
             from splitforge.core.traffic import ensure_service
             ensure_service(self.store)
@@ -256,7 +265,8 @@ class Panel:
         elif action == "profile.dns-tunnel":
             profile = self.manager.dns_tunnel(self._text(data, "name", limit=80), self._text(data, "protocol"),
                 self._text(data, "domain"), self._text(data, "resolver"), public_key=self._text(data, "public_key"),
-                certificate=self._text(data, "certificate"), replace_id=target or None)
+                certificate=self._text(data, "certificate"), replace_id=target or None,
+                username=self._text(data, 'username', limit=255), password=data.get('password', ''))
             report(f"Saved profile {profile.name}")
         elif action in {"profile.start", "profile.stop", "profile.test"}:
             result = getattr(self.manager, action.split(".")[1])(target)

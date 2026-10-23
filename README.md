@@ -230,6 +230,7 @@ depending on unattended recovery.
 | [Web panel](docs/WEB_PANEL.md) | Browser dashboard, token sign-in, SSH forwarding and persistent service |
 | [Backups and rollback](docs/BACKUPS.md) | Encrypted exports, restoration and previous-version recovery |
 | [Traffic and budgets](docs/TRAFFIC.md) | Per-profile speed limits, independent counters, graphs and volume quotas |
+| [Real tunnel aggregation](docs/BONDING.md) | Combine DNSTT, NoizDNS and Slipstream paths into one TCP output |
 | [فارسی](docs/README.fa.md) | آموزش قدم‌به‌قدم و مدیریت سرور |
 | [Protocols](docs/PROTOCOLS.md) | Provider files, URI formats and DNS tunnels |
 | [Architecture](docs/ARCHITECTURE.md) | Routing ownership, guards and lifecycle |

@@ -292,6 +292,8 @@ class TrafficStore:
         checked_id(identifier)
         if identifier not in self.store.snapshot()[kind]:
             raise ValueError('Unknown traffic target')
+        if kind == 'profiles' and limit is not None and any(p.protocol == 'bond' and identifier in p.config['members'] for p in self.store.profiles()):
+            raise ValueError('Set volume limits on the bonded output, not its member proxy transports')
         if limit is not None and (type(limit) is not int or not 1 <= limit < 2**63):
             raise ValueError('Quota must be a positive byte count or disabled')
         if type(warning) is not int or not 1 <= warning <= 99 or type(reset) is not bool:

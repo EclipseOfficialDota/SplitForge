@@ -28,6 +28,7 @@ users = typer.Typer(help="Route future systemd user-manager workloads.")
 web_app = typer.Typer(invoke_without_command=True, help="Set up and run the web control panel.")
 backups = typer.Typer(help="Encrypted profile/settings export and recovery.")
 traffic_app = typer.Typer(help='Independent application/tunnel usage and sampled traffic budgets.')
+bond_app = typer.Typer(help='Real multi-path TCP aggregation with an authenticated destination relay.')
 app.add_typer(profiles, name="profile")
 app.add_typer(apps, name="app")
 app.add_typer(deps, name="dependencies")
@@ -35,7 +36,32 @@ app.add_typer(users, name="user")
 app.add_typer(web_app, name="web")
 app.add_typer(backups, name="backup")
 app.add_typer(traffic_app, name='traffic')
+app.add_typer(bond_app, name='bond')
 console = Console()
+
+
+@bond_app.command('relay-setup')
+def bond_relay_setup():
+    """Install the loopback relay on the destination DNS tunnel server."""
+    from splitforge.core.bond import setup_relay
+    setup_relay()
+
+
+@bond_app.command('create')
+def bond_create(ctx: typer.Context, name: str,
+                members: list[str] = typer.Option(..., '--member'),
+                relay_host: str = typer.Option('127.0.0.1', '--relay-host'),
+                relay_port: int = typer.Option(28443, '--relay-port', min=1, max=65535),
+                token_file: Path = typer.Option(..., '--token-file')):
+    """Create a shared output from 2–8 proxy member profiles; token is read privately."""
+    require_root()
+    import stat
+    info = token_file.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077 or info.st_size > 1024:
+        raise ValueError('Join token file must be private, owned and at most 1024 bytes')
+    store, manager, _ = objects(ctx)
+    profile = manager.bond(name, [store.profile(member).id for member in members], relay_host, relay_port, token_file.read_text().strip())
+    typer.echo(f'Created bonded output {profile.name}; start it and assign applications normally')
 
 
 @traffic_app.command('enable')

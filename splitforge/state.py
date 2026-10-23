@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 
 ID = re.compile(r"^[0-9a-f]{8}$")
 PROTOCOLS = {"vless", "vmess", "trojan", "shadowsocks", "xray",
-             "wireguard", "openvpn", "dnstt", "slipstream", "socks5"}
+             "wireguard", "openvpn", "dnstt", "slipstream", "noizdns", "socks5", "bond"}
 
 
 def checked_id(value: str) -> str:
@@ -45,6 +45,20 @@ class Profile:
         checked_id(self.id)
         if self.protocol not in PROTOCOLS or not isinstance(self.config, dict):
             raise ValueError("Unknown protocol or invalid configuration")
+        if self.protocol == 'bond':
+            from splitforge.core.bond import token_bytes
+            token_bytes(self.config.get('token'))
+            members = self.config.get('members')
+            if not isinstance(members, list) or not 2 <= len(members) <= 8 or not all(isinstance(member, str) for member in members) or len(set(members)) != len(members):
+                raise ValueError('A bond requires 2–8 distinct member profiles')
+            for member in members:
+                checked_id(member)
+            host = self.config.get('relay_host')
+            port = self.config.get('relay_port')
+            if not isinstance(host, str) or not host or len(host) > 253 or any(c.isspace() or ord(c) < 33 for c in host):
+                raise ValueError('Invalid aggregation relay host')
+            if type(port) is not int or not 1 <= port <= 65535:
+                raise ValueError('Invalid aggregation relay port')
         if not self.name.strip() or len(self.name) > 80 or any(ord(c) < 32 for c in self.name):
             raise ValueError("Profile name must contain 1–80 printable characters")
         if not 0 <= self.slot <= 4095:
@@ -170,6 +184,7 @@ class StateStore:
         for key, item in data["profiles"].items():
             if Profile(**item).id != key:
                 raise ValueError("Profile key mismatch")
+        self._validate_bonds(data)
         for key, item in data["apps"].items():
             app = AppBinding(**item)
             if app.id != key or not app.profile_references.issubset(data['profiles']):
@@ -235,6 +250,7 @@ class StateStore:
             if not profile.slot or any(p["slot"] == profile.slot for p in others):
                 raise ValueError("Subnet pool exhausted or slot occupied")
             data["profiles"][profile.id] = asdict(profile)
+            self._validate_bonds(data)
             self._write(data)
         return profile
 
@@ -250,10 +266,21 @@ class StateStore:
     def delete_profile(self, profile_id: str):
         with self.operation():
             data = self._read()
+            if any(profile_id in p['config'].get('members', []) for p in data['profiles'].values() if p['protocol'] == 'bond'):
+                raise ValueError('Profile is still a member of an aggregation group')
             if any(profile_id in AppBinding(**a).profile_references for a in data["apps"].values()) or profile_id in data["users"].values():
                 raise ValueError("Profile is still assigned")
             del data["profiles"][checked_id(profile_id)]
             self._write(data)
+
+    @staticmethod
+    def _validate_bonds(data):
+        for profile in data['profiles'].values():
+            if profile['protocol'] == 'bond':
+                for member in profile['config']['members']:
+                    target = data['profiles'].get(member)
+                    if not target or target['protocol'] in ('bond', 'wireguard', 'openvpn'):
+                        raise ValueError('Aggregation members must be existing independent TCP proxy profiles')
 
     def delete_app(self, app_id: str):
         with self.operation():

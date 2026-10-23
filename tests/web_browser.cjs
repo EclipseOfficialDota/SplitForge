@@ -202,6 +202,38 @@ const base = process.env.SPLITFORGE_WEB_URL || "http://127.0.0.1:8765";
       .filter({ hasText: "Read-only demo" })
       .waitFor();
     await page.locator("#modal-close").click();
+    await page.locator('[data-action="add-bond"]').first().click();
+    await page.locator('#bond-form [name="name"]').fill("combined-test");
+    await page.locator('#bond-form [name="token"]').fill("a".repeat(64));
+    await page.locator('#bond-form [name="member"]').first().check();
+    await page
+      .getByRole("button", { name: "Save bonded output", exact: true })
+      .click();
+    await page
+      .locator("#form-error")
+      .filter({ hasText: "Select 2–8" })
+      .waitFor();
+    await page.locator('#bond-form [name="member"]').nth(1).check();
+    await page.locator("#modal-language-button").click();
+    assert.match(await page.locator("#modal").innerText(), /خروجی تجمیعی/);
+    assert.equal(
+      await page.locator('#bond-form [name="name"]').inputValue(),
+      "combined-test",
+    );
+    await page.locator("#modal-language-button").click();
+    await page
+      .getByRole("button", { name: "Save bonded output", exact: true })
+      .click();
+    await page
+      .locator("#form-error")
+      .filter({ hasText: "Read-only demo" })
+      .waitFor();
+    assert.equal(
+      new URL(page.url()).search,
+      "",
+      "Bond token must never appear in the URL",
+    );
+    await page.locator("#modal-close").click();
     await page.getByRole("button", { name: "Live logs", exact: false }).click();
     await page
       .locator("#journal-output")
