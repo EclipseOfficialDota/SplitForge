@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.10.1 — 2026-10-24
+
+- Every release now builds eight complete offline ZIP assets: Ubuntu 22.04/24.04
+  and Debian 12/13, each for amd64 and arm64. Native Python wheels, OS package
+  dependency closure, all supported proxy clients, nginx and Certbot included.
+- Root offline installer checks OS/CPU and all payload SHA-256 hashes before
+  installing exclusively from local packages. DNS clients are built at release
+  time; pinned source archives, toolchain and module sources accompany them.
+- Every ZIP must pass installation in a clean container with networking disabled
+  before publication. English/Persian offline installation and upgrade guide.
+
 ## 2.10.0 — 2026-10-23
 
 - Real multi-path TCP aggregation: stripe each stream over 2–8 independent proxy

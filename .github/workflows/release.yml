@@ -19,9 +19,71 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  offline:
+    name: Offline ${{ matrix.image }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+        arch: [amd64, arm64]
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      IMAGE: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+      - name: Build complete native offline bundle
+        run: |
+          set -euo pipefail
+          mkdir -p offline-dist
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/offline-dist:/out" "$IMAGE" bash -ec '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends python3-venv ca-certificates
+            python3 -m venv /tmp/bootstrap
+            /tmp/bootstrap/bin/pip install tomli
+            cp -a /src /tmp/source
+            /tmp/bootstrap/bin/python /tmp/source/tools/build_offline.py /tmp/source /out
+          '
+      - name: Install in a fresh container with networking disabled
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          with ZipFile(next(Path('offline-dist').glob('*.zip'))) as archive:
+              archive.extractall('offline-test')
+          PY
+          folder=$(find "$PWD/offline-test" -mindepth 1 -maxdepth 1 -type d)
+          docker run --rm --network none -v "$folder:/bundle:ro" "$IMAGE" bash -ec '
+            bash /bundle/install-offline.sh
+            splitforge --version
+            splitforge --help >/dev/null
+            /opt/splitforge-certbot/bin/certbot --version
+            for binary in xray tun2socks dnstt-client noizdns-client slipstream-client; do
+              test -x "/usr/local/bin/$binary"
+            done
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-${{ strategy.job-index }}
+          path: offline-dist/*.zip
+          compression-level: 0
+          retention-days: 3
+
   publish:
+    needs: offline
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
@@ -33,6 +95,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: offline-*
+          path: dist
+          merge-multiple: true
       - name: Validate version and build distributions
         run: |
           set -euo pipefail
@@ -46,11 +113,11 @@ jobs:
           python -m pip install build
           python -m build
           cd dist
-          sha256sum *.whl *.tar.gz > SHA256SUMS
+          sha256sum *.whl *.tar.gz *.zip > SHA256SUMS
       - name: Attach verified distributions to the release
         env:
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "$TAG" dist/*.whl dist/*.tar.gz dist/SHA256SUMS --clobber
+        run: gh release upload "$TAG" dist/*.whl dist/*.tar.gz dist/*.zip dist/SHA256SUMS --clobber
       - name: Publish distribution archive to GitHub Packages
         env:
           REGISTRY_TOKEN: ${{ github.token }}

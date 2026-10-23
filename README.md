@@ -30,6 +30,11 @@ illustrative; demo mode makes no network changes.
 
 ## Install
 
+**Mirrors unavailable?** Download the matching **offline ZIP** from
+[Releases](https://github.com/EclipseOfficialDota/SplitForge/releases/latest).
+It includes system packages, Python wheels, all proxy cores and an offline
+installer. See [offline installation / نصب آفلاین](docs/OFFLINE.md).
+
 On Ubuntu/Debian with systemd, Python 3.10+, TUN and root access:
 
 ```sh

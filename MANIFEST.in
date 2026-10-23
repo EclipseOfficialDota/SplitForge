@@ -1,3 +1,4 @@
-include install.sh install-relay.sh requirements.lock LICENSE README.md SECURITY.md CONTRIBUTING.md CHANGELOG.md
+include install.sh install-relay.sh install-offline.sh requirements.lock LICENSE README.md SECURITY.md CONTRIBUTING.md CHANGELOG.md
+recursive-include tools *.py
 recursive-include docs *.md *.svg *.png
 recursive-include tests *.py *.cjs
