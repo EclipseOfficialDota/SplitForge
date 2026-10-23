@@ -2,7 +2,7 @@
 
 [README](../README.md) · [Setup](GETTING_STARTED.md) · [Architecture](ARCHITECTURE.md)
 
-Recorded during development on 2026-10-16 through 2026-10-19. These are actual results,
+Recorded during development on 2026-10-16 through 2026-10-23. These are actual results,
 not an external audit, performance benchmark or universal production certificate.
 GitHub CI has its own independently visible run status.
 
@@ -42,6 +42,19 @@ credential mounting passed an authenticated readiness probe. Browser tests cover
 EN/FA aggregation forms, preserved drafts, member selection, read-only refusal
 and secret-free URLs. No customer tunnel credentials or public-provider speed
 results are claimed by these controlled checks.
+
+The published destination installer was then executed end-to-end in the Linux
+lab: release wheel/checksum download, separate minimal venv, dependency install,
+unprivileged systemd restart and authenticated readiness all succeeded. GitHub CI
+and release/package publishing for source revision `88963a3f86bd` also succeeded.
+An authorized application VPS was upgraded to 2.10.0; its trusted public HTTPS
+endpoint served the exact browser-tested app.js SHA-256, authenticated state and
+Secure login/logout. The verified NoizDNS binary was installed and appeared in
+the dependency panel. Main IPv4 routes were unchanged and the web/renewal units
+remained active. A third-party workload already had exit-1 failures recorded
+before deployment; this record does not claim that workload became healthy.
+The owner's separate private destination still requires their relay installation
+and member configuration; no live customer aggregation speed is claimed here.
 
 Version 2.9.0: **108 tests passed with root integration enabled** (156.597
 seconds). A final four-test speed run passed after adding the limited-proxychains
