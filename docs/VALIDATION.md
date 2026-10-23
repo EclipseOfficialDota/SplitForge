@@ -2,7 +2,7 @@
 
 [README](../README.md) · [Setup](GETTING_STARTED.md) · [Architecture](ARCHITECTURE.md)
 
-Recorded during development on 2026-10-16 through 2026-10-23. These are actual results,
+Recorded during development on 2026-10-16 through 2026-10-24. These are actual results,
 not an external audit, performance benchmark or universal production certificate.
 GitHub CI has its own independently visible run status.
 
@@ -17,6 +17,20 @@ privileged integration suite. Runtime constraints select a Python-3.10-compatibl
 platformdirs release on Ubuntu 22.04, with newer Python retaining its tested pin.
 
 ## Environment
+
+Version 2.10.2 offline release checks: **eight native clean-container installs
+passed with Docker networking disabled**. Targets: Ubuntu 22.04/24.04 and Debian
+12/13, each on amd64 and arm64. Each test verifies the complete payload checksum
+manifest, installs local .debs and Python wheels, runs the installed CLI/help and
+Certbot, and checks all five bundled core executables. This covers dependency
+availability without mirrors; it does not emulate a kernel or test live VPN
+connectivity inside these unprivileged build containers. Root network/protocol
+integration and Chromium panel checks passed separately in
+[CI](https://github.com/EclipseOfficialDota/SplitForge/actions/runs/40021868601).
+The [offline release run](https://github.com/EclipseOfficialDota/SplitForge/actions/runs/40021882903)
+contains the per-target installation logs. A clean-install failure found in the
+first packaging attempt was fixed by staging verified .debs into apt's archive
+cache before using `--no-download`; failed ZIPs were never published.
 
 Version 2.10.0: **117 tests passed with root integration enabled** (202.433
 seconds). The single-stream test transfers byte-exact random data in both
